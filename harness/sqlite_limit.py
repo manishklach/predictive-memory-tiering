@@ -35,9 +35,25 @@ def worker(db, mode, binary):
     libc = ctypes.CDLL(None, use_errno=True)
     bitmap = ctypes.create_string_buffer(pages)
     reads = evictions = 0
-    profile = dict(residency=0, controller_round_trip=0, pageout=0, scoring=0, pipe_path=0)
+    profile = dict(residency=0, controller_round_trip=0, pageout=0, scoring=0, pipe_path=0, inline_path=0)
     ctl = None
-    if mode != "stock":
+    inline = mode == "detector-inline"
+    if inline:
+        lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
+        ptr = ctypes.c_void_p
+        lib.pmt_policy_create.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint64,
+                                          ctypes.c_uint64, ctypes.c_int]
+        lib.pmt_policy_create.restype = ptr
+        lib.pmt_profile_step.argtypes = [ptr, ptr, ptr, ptr]
+        lib.pmt_profile_step.restype = ctypes.c_uint64
+        lib.pmt_policy_destroy.argtypes = [ptr]
+        lib.pmt_policy_destroy.restype = None
+        policy = lib.pmt_policy_create(pages, pages // 2, 10_000_000, 1_000_000, 0)
+        if not policy:
+            raise MemoryError("allocate inline policy")
+        observation = ctypes.create_string_buffer(16)
+        advice = (ctypes.c_uint32 * 2)()
+    elif mode != "stock":
         ctl = subprocess.Popen([(binary or ROOT / "pmtd"), "--control", str(pages), str(pages // 2),
                                 "10", "1", "none"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     base = apsw.vfsnames()[0]
@@ -48,7 +64,7 @@ def worker(db, mode, binary):
             data = backing[offset:offset + amount]
             for page in range(offset // PAGE, (offset + amount + PAGE - 1) // PAGE):
                 reads += 1
-                if ctl:
+                if ctl or inline:
                     t = time.perf_counter_ns()
                     refresh = mode == "detector-full" or (reads - 1) % 16 == 0
                     if refresh and libc.mincore(ctypes.c_void_p(address), ctypes.c_size_t(size), bitmap):
@@ -56,17 +72,22 @@ def worker(db, mode, binary):
                     bitmap[page] = 1  # The just-read page was resident at access.
                     now = time.perf_counter_ns()
                     profile['residency'] += now - t
-                    ctl.stdin.write(struct.pack("=QII", time.monotonic_ns(), page, 0) + bitmap.raw)
-                    ctl.stdin.flush()
-                    if profiled:
-                        victim, fetch, scoring = struct.unpack("=IIQ", ctl.stdout.read(16))
+                    if inline:
+                        struct.pack_into("=QII", observation, 0, time.monotonic_ns(), page, 0)
+                        scoring = lib.pmt_profile_step(policy, observation, bitmap, advice)
+                        victim, fetch = advice
                     else:
-                        victim, fetch = struct.unpack("=II", ctl.stdout.read(8))
+                        ctl.stdin.write(struct.pack("=QII", time.monotonic_ns(), page, 0) + bitmap.raw)
+                        ctl.stdin.flush()
+                        if profiled:
+                            victim, fetch, scoring = struct.unpack("=IIQ", ctl.stdout.read(16))
+                        else:
+                            victim, fetch = struct.unpack("=II", ctl.stdout.read(8))
                     replied = time.perf_counter_ns()
                     profile['controller_round_trip'] += replied - now
-                    if profiled:
+                    if profiled or inline:
                         profile["scoring"] += scoring
-                        profile["pipe_path"] += replied - now - scoring
+                        profile["inline_path" if inline else "pipe_path"] += replied - now - scoring
                     assert fetch == 0xffffffff
                     if victim != 0xffffffff:
                         backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), victim * PAGE, PAGE)
@@ -103,6 +124,8 @@ def worker(db, mode, binary):
     elapsed = time.perf_counter_ns() - start
     conn.close()
     vfs.unregister()
+    if inline:
+        lib.pmt_policy_destroy(policy)
     if ctl:
         ctl.stdin.close()
         if ctl.wait():
@@ -142,16 +165,12 @@ def main(output, baseline):
             raise ValueError("calibration swapped")
         limit = control["peak_bytes"] // (2 * PAGE) * PAGE
         runs = []
-        for pair in range(4):
-            orders = (("stock", "detector-full", "detector"), ("detector", "detector-full", "stock"),
-                      ("detector-full", "stock", "detector"), ("detector", "stock", "detector-full"))
-            if baseline:
-                orders = tuple(tuple("detector-before" if m == "detector-full" else m for m in order)
-                               for order in orders)
-            for mode in orders[pair]:
-                binary = None
-                if baseline and mode != "stock":
-                    binary = baseline if mode == "detector-before" else ROOT / "pmtd-profile"
+        before, after = ("detector-before", "detector-inline") if baseline else ("detector-full", "detector")
+        orders = (("stock", before, after), (after, before, "stock"),
+                  (before, "stock", after), (after, "stock", before))
+        for pair, order in enumerate(orders):
+            for mode in order:
+                binary = baseline if mode == "detector-before" else None
                 record = run(db, mode, limit, binary)
                 assert record["checksum"] == control["checksum"]
                 runs.append(dict(pair=pair + 1, **record))
@@ -161,7 +180,7 @@ def main(output, baseline):
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
                              profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
-                                 for label, path in ([("before", baseline), ("after", ROOT / "pmtd-profile")]
+                                 for label, path in ([("before", baseline), ("after", ROOT / "libpmt-profile.so")]
                                                      if baseline else [])},
                              calibration=control, memory_max_bytes=limit, runs=runs, median=summary),
                              indent=2) + "\n")

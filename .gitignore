@@ -9,3 +9,4 @@ __pycache__/
 /kernel/Module.symvers
 /kernel/modules.order
 /pmtd-profile
+/libpmt-profile.so

@@ -111,3 +111,26 @@ All three modes ran four times on the same WSL2 host, with identical requests an
 | Refresh every 16 observations | 1.864 | 1,734 | 0.201 | 0.914 | 0.078 |
 
 The change cut median detector p99 by 47% and raised throughput 2.82×. Stock Linux was faster in every repeat. The remaining largest measured stage is the synchronous controller round trip, which includes serialization, pipe transfers, scheduling, and detector scoring. Page-out timing covers the advice call and bookkeeping; kernel writeback may continue after the call returns. Other query work lies outside these three timers. Run the reproduction command above to repeat the three-way comparison. [Initial detector profile](results/sqlite-profile-before.json) · [Three-way comparison and per-run timers](results/sqlite-profile-50.json)
+
+### Controller scoring and pipe communication
+
+The pipe-backed detector spent 721 ms of its 838 ms controller round trip outside the C decision function over 3,000 queries. The SQLite adapter can now call the same scorer in-process with its existing residency buffer, removing a bitmap copy and a synchronous request/reply per observation. Both detectors refresh residency every 16 observations and issue page-out advice with prefetch disabled.
+
+| Mode | Query p99 (ms) | Queries/s | Controller total (ms) | Scoring (ms) | Communication and wrapper (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Stock Linux | 0.669 | 10,532 | — | — | — |
+| Detector via pipes | 1.523 | 1,890 | 838 | 117 | 721 |
+| Detector in-process | 1.162 | 3,722 | 141 | 104 | 36 |
+
+Each value is the median across four runs on WSL2 at the same 19,275,776-byte cgroup limit. The controller columns accumulate elapsed time across a run. The C timer surrounds the decision function. Subtracting that time from the adapter's round-trip timer captures packing, transport, scheduling, and unpacking together. For the in-process path this remainder includes the Python-to-C call. Running the scorer in SQLite's process also eliminates the separate daemon's memory footprint under the cap.
+
+The in-process path reduced median p99 by 24% and nearly doubled throughput. Stock Linux still led on both metrics. Every run returned the expected query results, used swap, and finished with zero OOM kills. [Per-run measurements](results/sqlite-roundtrip-50.json) · [Initial pipe profile with identical detector binaries in both arms](results/sqlite-roundtrip-pilot.json)
+
+To reproduce on Linux with the SQLite benchmark prerequisites, build both profiled interfaces and pass the pipe executable by absolute path:
+
+```sh
+make pmtd pmtd-profile libpmt-profile.so
+sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-roundtrip.json --profile-baseline "$PWD/pmtd-profile"
+```
+
+The recorded pipe baseline was built at commit `5d490ca`. The raw report includes hashes for both measured binaries.

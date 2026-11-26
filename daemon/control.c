@@ -168,22 +168,20 @@ static uint64_t monotonic_ns(void)
 }
 #endif
 
-int pmt_control(uint32_t pages, uint32_t budget, uint64_t idle_ns,
-		uint64_t dwell_ns, enum pmt_model model)
+struct policy *pmt_policy_create(uint32_t pages, uint32_t budget, uint64_t idle_ns,
+                                 uint64_t dwell_ns, enum pmt_model model)
 {
-	struct policy *policy = calloc(1, sizeof(*policy));
-	unsigned char *resident = malloc(pages);
-	uint64_t last_timestamp = 0;
-	int status = EXIT_FAILURE;
+	struct policy *policy;
 
-	if (!policy || !resident) {
-		perror("allocate controller");
-		goto out;
-	}
+	if (!pages || pages > PMT_MAX_ARENA_PAGES || !budget || budget > pages || !idle_ns)
+		return NULL;
+	policy = calloc(1, sizeof(*policy));
+	if (!policy)
+		return NULL;
 	policy->history = calloc(pages, sizeof(*policy->history));
 	if (!policy->history) {
-		perror("allocate page history");
-		goto out;
+		free(policy);
+		return NULL;
 	}
 	policy->pages = pages;
 	policy->budget = budget;
@@ -192,7 +190,39 @@ int pmt_control(uint32_t pages, uint32_t budget, uint64_t idle_ns,
 	policy->model = model;
 	policy->previous = PMT_NO_PAGE;
 	policy->current = PMT_NO_PAGE;
+	return policy;
+}
 
+void pmt_policy_destroy(struct policy *policy)
+{
+	if (policy)
+		free(policy->history);
+	free(policy);
+}
+
+#ifdef PMT_PROFILE
+uint64_t pmt_profile_step(struct policy *policy, const struct pmt_observation *obs,
+			  const unsigned char *resident, struct pmt_advice *advice)
+{
+	uint64_t start = monotonic_ns();
+
+	*advice = decide(policy, obs, resident);
+	return monotonic_ns() - start;
+}
+#endif
+
+int pmt_control(uint32_t pages, uint32_t budget, uint64_t idle_ns,
+		uint64_t dwell_ns, enum pmt_model model)
+{
+	struct policy *policy = pmt_policy_create(pages, budget, idle_ns, dwell_ns, model);
+	unsigned char *resident = malloc(pages);
+	uint64_t last_timestamp = 0;
+	int status = EXIT_FAILURE;
+
+	if (!policy || !resident) {
+		perror("allocate controller");
+		goto out;
+	}
 	for (;;) {
 		struct pmt_observation obs;
 		struct pmt_advice advice;
@@ -227,9 +257,7 @@ int pmt_control(uint32_t pages, uint32_t budget, uint64_t idle_ns,
 	}
 
 out:
-	if (policy)
-		free(policy->history);
-	free(policy);
+	pmt_policy_destroy(policy);
 	free(resident);
 	return status;
 }

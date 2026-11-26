@@ -1,0 +1,392 @@
+{
+  "kernel": "6.6.87.2-microsoft-standard-WSL2+",
+  "sqlite": "3.45.1",
+  "apsw": "3.43.0.0",
+  "pages": 7018,
+  "requests": 3000,
+  "controller_sha256": "fdd79e55aa15e46a843bf565f79b15b3c581ae1e4a34098c8af039bb8c428c5b",
+  "profile_binary_sha256": {
+    "before": "24d4bb9d5faf74d7c67059a42ad0d44af109cc14ba358fac689148ef2f859d6f",
+    "after": "7b848f56dc5d9c8fee3e08e2e3312355b984a166779b1c66f0ac5642e4558860"
+  },
+  "calibration": {
+    "mode": "stock",
+    "p99_us": 71.607,
+    "queries_per_s": 43855.41617752041,
+    "elapsed_ns": 68406602,
+    "profile_ns": {
+      "residency": 0,
+      "controller_round_trip": 0,
+      "pageout": 0,
+      "scoring": 0,
+      "pipe_path": 0,
+      "inline_path": 0
+    },
+    "reads": 7258,
+    "pageout_requests": 0,
+    "checksum": 10492491,
+    "peak_bytes": 38555648,
+    "swap_peak_bytes": 0,
+    "memory_events": [
+      "low 0",
+      "high 0",
+      "max 0",
+      "oom 0",
+      "oom_kill 0",
+      "oom_group_kill 0"
+    ]
+  },
+  "memory_max_bytes": 19275776,
+  "runs": [
+    {
+      "pair": 1,
+      "mode": "stock",
+      "p99_us": 1131.246,
+      "queries_per_s": 7244.508638303803,
+      "elapsed_ns": 414106760,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0,
+        "scoring": 0,
+        "pipe_path": 0,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31531008,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 148",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 1,
+      "mode": "detector-before",
+      "p99_us": 2067.825,
+      "queries_per_s": 1404.3265124077407,
+      "elapsed_ns": 2136255332,
+      "profile_ns": {
+        "residency": 204877221,
+        "controller_round_trip": 1119003017,
+        "pageout": 114672730,
+        "scoring": 199376385,
+        "pipe_path": 919626632,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 7218,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30818304,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 140",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 1,
+      "mode": "detector-inline",
+      "p99_us": 1263.55,
+      "queries_per_s": 3354.108228761062,
+      "elapsed_ns": 894425521,
+      "profile_ns": {
+        "residency": 191251089,
+        "controller_round_trip": 166127271,
+        "pageout": 46995752,
+        "scoring": 118778131,
+        "pipe_path": 0,
+        "inline_path": 47349140
+      },
+      "reads": 7258,
+      "pageout_requests": 7196,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 33447936,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 138",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "detector-inline",
+      "p99_us": 978.38,
+      "queries_per_s": 4269.690965062366,
+      "elapsed_ns": 702626964,
+      "profile_ns": {
+        "residency": 176780939,
+        "controller_round_trip": 121327682,
+        "pageout": 34260504,
+        "scoring": 90758501,
+        "pipe_path": 0,
+        "inline_path": 30569181
+      },
+      "reads": 7258,
+      "pageout_requests": 7170,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30613504,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 142",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "detector-before",
+      "p99_us": 1482.152,
+      "queries_per_s": 1984.0742736246712,
+      "elapsed_ns": 1512040169,
+      "profile_ns": {
+        "residency": 182070834,
+        "controller_round_trip": 806221635,
+        "pageout": 64556775,
+        "scoring": 112786920,
+        "pipe_path": 693434715,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 7201,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31453184,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 143",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "stock",
+      "p99_us": 673.241,
+      "queries_per_s": 11764.240110713106,
+      "elapsed_ns": 255010096,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0,
+        "scoring": 0,
+        "pipe_path": 0,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30695424,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 136",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "detector-before",
+      "p99_us": 1563.294,
+      "queries_per_s": 1811.1663837434603,
+      "elapsed_ns": 1656391167,
+      "profile_ns": {
+        "residency": 207453391,
+        "controller_round_trip": 869828166,
+        "pageout": 72378286,
+        "scoring": 121690599,
+        "pipe_path": 748137567,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 7202,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 32305152,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 145",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "stock",
+      "p99_us": 664.665,
+      "queries_per_s": 10505.626782187659,
+      "elapsed_ns": 285561258,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0,
+        "scoring": 0,
+        "pipe_path": 0,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31064064,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 138",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "detector-inline",
+      "p99_us": 1285.597,
+      "queries_per_s": 3531.939540593301,
+      "elapsed_ns": 849391663,
+      "profile_ns": {
+        "residency": 200173450,
+        "controller_round_trip": 145232505,
+        "pageout": 40932063,
+        "scoring": 107420465,
+        "pipe_path": 0,
+        "inline_path": 37812040
+      },
+      "reads": 7258,
+      "pageout_requests": 7191,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31076352,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 145",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "detector-inline",
+      "p99_us": 1060.507,
+      "queries_per_s": 3911.427788185645,
+      "elapsed_ns": 766983353,
+      "profile_ns": {
+        "residency": 194529234,
+        "controller_round_trip": 135789641,
+        "pageout": 39411408,
+        "scoring": 101536141,
+        "pipe_path": 0,
+        "inline_path": 34253500
+      },
+      "reads": 7258,
+      "pageout_requests": 7173,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30248960,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 142",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "stock",
+      "p99_us": 657.615,
+      "queries_per_s": 10557.818058817682,
+      "elapsed_ns": 284149621,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0,
+        "scoring": 0,
+        "pipe_path": 0,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31096832,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 138",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "detector-before",
+      "p99_us": 1443.94,
+      "queries_per_s": 1968.815931031118,
+      "elapsed_ns": 1523758495,
+      "profile_ns": {
+        "residency": 187325063,
+        "controller_round_trip": 797564920,
+        "pageout": 64167461,
+        "scoring": 108109843,
+        "pipe_path": 689455077,
+        "inline_path": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 7205,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31920128,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 144",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    }
+  ],
+  "median": {
+    "stock": {
+      "p99_us": 668.953,
+      "queries_per_s": 10531.72242050267
+    },
+    "detector-before": {
+      "p99_us": 1522.723,
+      "queries_per_s": 1889.9911573872891
+    },
+    "detector-inline": {
+      "p99_us": 1162.0285,
+      "queries_per_s": 3721.683664389473
+    }
+  }
+}
