@@ -8,7 +8,7 @@ When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it
 
 The PID-scoped module emits synthetic sequence numbers through a bounded trace ring. A separate cooperative workload reports page accesses and residency to the C controller. The controller ranks eviction candidates and uses stride or Markov prediction. The workload applies the resulting advice to its own anonymous arena.
 
-The intended EC2 system will sample real target processes and tier their pages through local NVMe swap. Connecting that kernel path to the controller is still open. The replay detector and C controller currently use different scores, so replay cannot validate the controller's eviction decisions. [System design](docs/DESIGN.md) � [Cooperative runtime](docs/LOCAL-RUNTIME.md)
+The intended EC2 system will sample real target processes and tier their pages through local NVMe swap. Connecting that kernel path to the controller is still open. The replay detector and C controller currently use different scores, so replay cannot validate the controller's eviction decisions. [System design](docs/DESIGN.md) · [Cooperative runtime](docs/LOCAL-RUNTIME.md)
 
 ## What would count as a win?
 
@@ -36,7 +36,7 @@ python3 harness/run_local.py --out /tmp/pmt-local.json
 python3 traces/replay.py results/bfs-trace.csv --budget 50 --out /tmp/pmt-bfs-replay.json
 ```
 
-`make test` builds the C reader, controller, and arena and runs the ABI, policy, and replay checks. `make module` builds `kernel/pmt.ko` with `W=1`. The module starts disabled and the module smoke test belongs on a dedicated EC2 test host. [Build guide](docs/BUILD.md) · [EC2 runbook](docs/RUNBOOK.md)
+`make test` builds the C reader, controller, and arena and runs the ABI, policy, and replay checks. `make module` builds `kernel/pmt.ko` with `W=1`. The module starts disabled and the module smoke test belongs on a dedicated EC2 test host. [Build guide](docs/BUILD.md) Â· [EC2 runbook](docs/RUNBOOK.md)
 
 ## Current evidence
 
@@ -58,3 +58,5 @@ The next EC2 milestone is the development-host recovery rehearsal. The Sydney sm
 | `harness/` | Cooperative Linux arena and matrix runner, controller fixtures, and module smoke test |
 | `results/` | Checked-in replay input and manifest plus EC2 boot evidence |
 | `docs/` | Design, experiment plan, build guide, and EC2 runbook |
+
+See the [first prerelease notes](docs/RELEASE-v0.1.0-alpha.1.md) for the verified scope and outstanding EC2 milestones.

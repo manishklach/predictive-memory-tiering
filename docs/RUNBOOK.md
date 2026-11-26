@@ -18,3 +18,15 @@ The smoke script verifies default-off behavior, reads synthetic records for a di
 The `/sys/class/misc/pmt_trace` controls are `target_pid` (host namespace), `enabled`, `interval_ms` (100–10,000), and `inject_failure`. Enabling requires a live target and an open reader. `/dev/pmt_trace` accepts one read-only reader at a time, and `/sys/kernel/debug/pmt/stats` reports emitted records, dropped records, and automatic disables for the current module lifetime.
 
 Use `--tier nvme-test` before a performance campaign. That mode checks that all active swap devices are backed by AWS instance-store NVMe and that zswap is disabled. The checker is read-only and records blockers. A passing report covers these host checks. [AWS device identification](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-block-device-mapping.html)
+
+## Secure Boot and archival
+
+On EFI hosts the smoke script requires mokutil. When Secure Boot is enabled, supply PMT_MOK_KEY and PMT_MOK_CERT in the root execution environment. The certificate must already be enrolled and in DER format. The script verifies enrollment and signs the module with the running kernel's sign-file tool. The functional cycle and 99 subsequent cycles make up the 100-cycle smoke test. Save the kernel logs for leak and taint review.
+
+After collecting all completed run manifests and logs into an operator-side directory, use the following command with a private S3 destination and the intended instance ID.
+
+~~~sh
+bash harness/archive_and_stop.sh "$PROFILE" "$REGION" "$INSTANCE_ID" "$RESULTS_DIR" "$S3_PREFIX"
+~~~
+
+The helper checks the Project=pmt instance tag, archives the supplied directory, uploads it under its SHA-256 digest, downloads it, compares the bytes, and then requests and waits for the stop. Archive verification covers the files already staged. The operator must verify campaign completeness before invoking the command.
