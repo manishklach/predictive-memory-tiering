@@ -247,7 +247,7 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         ctl.stdin.close()
         if ctl.wait():
             raise RuntimeError("controller failed")
-    print(json.dumps(dict(swap_faults=trace_result, p99_us=sorted(times)[(99 * requests + 99) // 100 - 1] / 1000,
+    print(json.dumps(dict(task_swap_calls=bounded.swap_trace.task_faults if trace_enabled else None, swap_faults=trace_result, p99_us=sorted(times)[(99 * requests + 99) // 100 - 1] / 1000,
                           queries_per_s=requests * 1e9 / elapsed, elapsed_ns=elapsed,
                           worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
                           memory_at_query_start=memory_at_start if fault_probe else None,

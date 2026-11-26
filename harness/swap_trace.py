@@ -21,8 +21,12 @@ class SwapTrace:
     def finish(self):
         with os.fdopen(self.fd) as stream:
             header, *lines = stream.read().splitlines()
-        if header != "missed 0" or len(lines) != len(self.pages):
+        fields = header.split()
+        if fields[:3] != ["missed", "0", "task_faults"] or len(lines) != len(self.pages):
             raise RuntimeError(f"incomplete swap trace: {header}, {len(lines)} rows")
+        self.task_faults = int(fields[3])
+        if not self.task_faults:
+            raise RuntimeError("no query-thread swap events; tracer liveness unverified")
         result = {}
         for line in lines:
             i, calls, handler_ns, delay_ns, offcpu_ns = map(int, line.split())

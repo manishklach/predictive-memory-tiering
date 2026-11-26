@@ -23,6 +23,7 @@ struct call_sample {
 
 static struct page_sample pages[64];
 static unsigned int nr_pages;
+static u64 task_faults;
 static atomic_t owner = ATOMIC_INIT(0);
 
 static struct tracepoint *switch_tp;
@@ -59,6 +60,7 @@ static int fault_start(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (task_pid_nr(current) != atomic_read(&owner))
 		return 1;
+	task_faults++;
 	vmf = (void *)regs_get_kernel_argument(regs, 0);
 	for (i = 0; i < nr_pages; i++) {
 		if (pages[i].addr != (vmf->address & PAGE_MASK))
@@ -83,7 +85,8 @@ static int fault_end(struct kretprobe_instance *ri, struct pt_regs *regs)
 	return 0;
 }
 
-static struct kretprobe probe = {
+static struct kretprobe probe;
+static const struct kretprobe template = {
 	.kp.symbol_name = "do_swap_page",
 	.entry_handler = fault_start,
 	.handler = fault_end,
@@ -97,7 +100,7 @@ static int show(struct seq_file *m, void *unused)
 
 	if (task_pid_nr(current) != atomic_read(&owner))
 		return -EPERM;
-	seq_printf(m, "missed %d\n", probe.nmissed);
+	seq_printf(m, "missed %d task_faults %llu\n", probe.nmissed, task_faults);
 	for (i = 0; i < nr_pages; i++)
 		seq_printf(m, "%u %llu %llu %llu %llu\n", i, pages[i].count,
 			   pages[i].duration, pages[i].delay, pages[i].offcpu);
@@ -114,6 +117,8 @@ static int trace_open(struct inode *inode, struct file *file)
 		return -EBUSY;
 	memset(pages, 0, sizeof(pages));
 	nr_pages = 0;
+	task_faults = 0;
+	probe = template;
 	ret = single_open(file, show, NULL);
 	if (!ret) {
 		ret = register_kretprobe(&probe);
