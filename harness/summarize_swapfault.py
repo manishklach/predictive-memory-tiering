@@ -28,7 +28,8 @@ def summarize(trial):
                 row[field] = sum(p[field] for p in traced.values())
             row["faulted_pages"] = sum(p["calls"] > 0 for p in traced.values())
         groups[run["mode"]].append(row)
-    if len(groups) != 4:
+    base = {"bounded-lru", "bounded-idle", "bounded-idle-faulttrace", "bounded-lru-faulttrace"}
+    if set(groups) not in (base, base | {"bounded-noswap-faulttrace"}):
         raise ValueError("missing arms")
     summary = {}
     for mode, rows in groups.items():

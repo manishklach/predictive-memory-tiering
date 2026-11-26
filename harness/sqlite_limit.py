@@ -281,7 +281,8 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345,
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False, swapfault_trial=False):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False, swapfault_trial=False, filtered_fault_trial=False):
+    swapfault_trial = swapfault_trial or filtered_fault_trial
     bounded_trial = bounded_trial or selection_trial or scoring_trial or guard_trial or lru_trial or noswap_trial or predictor_trial or swapfault_trial
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
@@ -376,11 +377,16 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
             prepare_idle(ROOT / "results/sydney-nvme-pilot", Path(directory))
             os.environ["PMT_MODEL_DIR"] = directory
             modes = ["bounded-lru", "bounded-idle", "bounded-lru-faulttrace", "bounded-idle-faulttrace"]
+            if filtered_fault_trial:
+                modes.append("bounded-noswap-faulttrace")
             orders = []
             rng = random.Random(1207)
-            for _ in range(3):
+            offsets = (0, 1, 4, 2, 3) if filtered_fault_trial else (0, 1, 3, 2)
+            while len(orders) < 12:
                 rng.shuffle(modes)
-                orders.extend(tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4))
+                n = len(modes)
+                orders.extend(tuple(modes[(i + j) % n] for j in offsets)
+                              for i in range(min(n, 12 - len(orders))))
         for pair, order in enumerate(orders):
             seed = 12345 + pair if extended or damos or live or live_score or live_profile or bounded_trial else 12345
             expected_checksum = control["checksum"] if seed == 12345 else None
@@ -427,6 +433,7 @@ if __name__ == "__main__":
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--scoring-trial", action="store_true", help="matched stock and fixed-range scoring-only runs with opaque SQLite payloads")
+        group.add_argument("--filtered-fault-trial", action="store_true", help="add traced swap-entry-filtered LRU to fault comparison")
         group.add_argument("--swapfault-trial", action="store_true", help="compare LRU and idle risk with and without swap fault probes")
         group.add_argument("--predictor-trial", action="store_true", help="compare held-out predictor with LRU and address order")
         group.add_argument("--noswap-trial", action="store_true", help="compare LRU skipping swap entries with current LRU and address order")
@@ -446,4 +453,4 @@ if __name__ == "__main__":
         args = parser.parse_args()
         if args.requests < 1:
             parser.error('--requests must be positive')
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial, args.swapfault_trial)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial, args.swapfault_trial, args.filtered_fault_trial)
