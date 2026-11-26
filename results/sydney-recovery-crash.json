@@ -15,5 +15,8 @@
   "snapshot_restore_check": "A new gp3 volume created from the stopped-host snapshot contained the prior PMT_SMOKE_PASS log on its ext4 root partition mounted ro,noload.",
   "efi_mount_correction": "The guest selected the restored disk EFI partition during restart. Remounted the original EFI partition, confirmed its device, and verified the restored disk was fully unmounted before detach.",
   "restore_scope": "filesystem recovery on a secondary volume; boot from the restored volume was not tested",
-  "regional_serial_console_setting_restored": true
+  "regional_serial_console_setting_restored": true,
+  "final_instance_state": "stopped",
+  "reported_credit_after_stop_usd": 100.0,
+  "temporary_restore_volume_delete_requested": true
 }
