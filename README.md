@@ -451,3 +451,9 @@ The T0 gate for a T1 pilot **passed**. It requires lower median p99 than stock, 
 Among pages with a full 100 ms observation window after advice, SQLite reused 16/630 (2.5%). Across all advice, 16 of the 19 early reuses found the page nonresident immediately before the read. Stock and scoring alone issued zero PMT page-out requests. Early reuse is undefined for those arms.
 
 Reproduce at 7b3063d on the pinned T0 guest with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --bounded-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Raw per-seed results](results/sydney-damon/formal/guard-perf.json)
+
+### Sydney T1 NVMe pilot launch status
+
+On November 26, 2026, EC2 listed i7i.4xlarge in three Sydney availability zones. The instance type has 16 default vCPUs and one 3,750 GB instance-store SSD. The first On-Demand launch returned `VcpuLimitExceeded` against the regional Standard quota of 8 vCPUs. A quota increase to 16 was requested. This attempt produced no guest or T1 benchmark data.
+
+The pilot will compare stock, scoring only, and guarded page-out using seeds 12345–12356 and the same 19,660,800-byte memory cap as T0. Before collecting results on the pinned kernel, verify exclusive local instance-store swap and disabled zswap with `python3 harness/check_host.py --tier nvme-test --out host.json`. Run `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --bounded-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. The 50% cap refers to the SQLite workload's calibrated footprint.
