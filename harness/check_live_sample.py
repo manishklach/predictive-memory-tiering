@@ -12,11 +12,13 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "daemon"))
 from live_sample import ADMIN, sampling
 
-HALF = 4 << 20
+HALF = 32 << 20
+GAP = mmap.PAGESIZE
 
 
 def child():
-    arena = mmap.mmap(-1, 2 * HALF, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
+    arena = mmap.mmap(-1, 2 * HALF + GAP, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
+    arena.madvise(mmap.MADV_NOHUGEPAGE)
     for pos in range(0, len(arena), 4096):
         arena[pos] = 1
     base = ctypes.addressof(ctypes.c_char.from_buffer(arena))
@@ -31,7 +33,7 @@ def child():
     print(base, flush=True)
     threading.Thread(target=requests, daemon=True).start()
     while True:
-        start = phase[0] * HALF
+        start = phase[0] * (HALF + GAP)
         for pos in range(start, start + HALF, 4096):
             arena[pos]
 
@@ -41,7 +43,7 @@ def run():
                           stdout=subprocess.PIPE, text=True) as target:
         try:
             base = int(target.stdout.readline())
-            ranges = [(base, base + HALF), (base + HALF, base + 2 * HALF)]
+            ranges = [(base, base + HALF), (base + HALF + GAP, base + 2 * HALF + GAP)]
             phases = []
             for hot in (0, 1, 0, 1):
                 target.stdin.write(f"{hot}\n")

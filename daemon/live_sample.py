@@ -34,7 +34,7 @@ def sampling(pid, ranges=()):
         (ADMIN / "nr_kdamonds").write_text("1")
         configured = True
         (daemon / "contexts/nr_contexts").write_text("1")
-        (ctx / "operations").write_text("vaddr")
+        (ctx / "operations").write_text("fvaddr" if ranges else "vaddr")
         (ctx / "targets/nr_targets").write_text("1")
         target = ctx / "targets/0"
         (target / "pid_target").write_text(str(pid))
