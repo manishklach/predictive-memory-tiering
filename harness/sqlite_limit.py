@@ -146,7 +146,13 @@ def worker(db, mode, binary, interval, score_interval, seed):
         context = pageout(os.getpid(), address, size)
     elif mode in ("live", "live-score"):
         context = sampling(os.getpid(), detector=detector, buffer_kb=32)
+    fault_probe = None
+    if os.environ.get("PMT_FAULT_PROFILE") == "1":
+        from fault_profile import FaultProfile
+        fault_probe = FaultProfile()
     with context as monitor:
+        if fault_probe:
+            fault_start = fault_probe.snapshot()
         usage = resource.getrusage(resource.RUSAGE_SELF)
         start = time.perf_counter_ns()
         for key in keys:
@@ -158,6 +164,9 @@ def worker(db, mode, binary, interval, score_interval, seed):
             checksum += row[0]
         elapsed = time.perf_counter_ns() - start
         used = resource.getrusage(resource.RUSAGE_SELF)
+        if fault_probe:
+            fault_end = fault_probe.snapshot()
+            fault_probe.sock.close()
         if detector:
             scored = [choice for stamp, choice in detector.decisions if start <= stamp <= start + elapsed]
         if mode == "damos":
@@ -173,6 +182,8 @@ def worker(db, mode, binary, interval, score_interval, seed):
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
                           worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
+                          fault_profile={k: v - fault_start[k] for k, v in fault_end.items()} if fault_probe else None,
+                          minor_faults=used.ru_minflt - usage.ru_minflt,
                           major_faults=used.ru_majflt - usage.ru_majflt,
                           voluntary_switches=used.ru_nvcsw - usage.ru_nvcsw,
                           reader_profile=detector.profile if detector else None,
@@ -275,6 +286,7 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         summary = {mode: {metric: statistics.median(r[metric] for r in runs if r["mode"] == mode)
                           for metric in ("p99_us", "queries_per_s")} for mode in orders[0]}
         output.write_text(json.dumps(dict(kernel=platform.release(), sqlite=apsw.sqlitelibversion(),
+                             page_cluster=int(Path("/proc/sys/vm/page-cluster").read_text()),
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
                              profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
