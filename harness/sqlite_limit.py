@@ -175,6 +175,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
                           worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
                           major_faults=used.ru_majflt - usage.ru_majflt,
                           voluntary_switches=used.ru_nvcsw - usage.ru_nvcsw,
+                          reader_profile=detector.profile if detector else None,
                           live_scored_epochs=len(scored) if detector else None,
                           live_candidate_epochs=sum(c is not None for c in scored) if detector else None,
                           live_region_records=len(monitor) if mode == "live" else None, damos_stats=stats, inline_score_calls=score_calls, history_only_calls=history_only_calls,

@@ -21,6 +21,7 @@ class RegionDetector:
         self.previous = []
         self.decisions = []
         self.partial = []
+        self.profile = dict(read_cpu_ns=0, wait_cpu_ns=0, decode_score_cpu_ns=0, reads=0, empty_reads=0)
         self.error = None
         self.stop = threading.Event()
 
@@ -65,16 +66,25 @@ class RegionDetector:
         pending = b""
         try:
             while not self.stop.is_set():
+                tick = time.thread_time_ns()
                 try:
                     chunk = os.read(self.fd, 65536)
                 except BlockingIOError:
+                    done = time.thread_time_ns()
+                    self.profile["empty_reads"] += 1
+                    self.profile["read_cpu_ns"] += done - tick
                     self.stop.wait(.005)
+                    self.profile["wait_cpu_ns"] += time.thread_time_ns() - done
                     continue
+                done = time.thread_time_ns()
+                self.profile["reads"] += 1
+                self.profile["read_cpu_ns"] += done - tick
                 if not chunk:
                     break
                 *lines, pending = (pending + chunk).split(b"\n")
                 for line in lines:
                     self.consume(line)
+                self.profile['decode_score_cpu_ns'] += time.thread_time_ns() - done
         except Exception as exc:
             self.error = exc
 
