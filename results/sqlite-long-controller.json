@@ -1,0 +1,28 @@
+{
+  "mode": "compiled controller; instantaneous successful advice; soft target",
+  "trace_sha256": "a958cc8033b180c4a0e33748a3d754620b5a77f4b4f7fee5932e9f2bd4bf98e2",
+  "daemon_sha256": "6ac3738770dc697bc9dd83bc2cd9f191e02f0ca35332c3f97ade2e4b2a3ac6a3",
+  "idle_ms": 10000,
+  "dwell_ms": 1000,
+  "budget_pages": 129,
+  "runs": {
+    "none": {
+      "evictions": 241,
+      "prefetches": 0,
+      "repeat_misses": 240,
+      "observations_above_budget_after_advice": 1240
+    },
+    "stride": {
+      "evictions": 232,
+      "prefetches": 103,
+      "repeat_misses": 128,
+      "observations_above_budget_after_advice": 1240
+    },
+    "markov": {
+      "evictions": 241,
+      "prefetches": 21,
+      "repeat_misses": 219,
+      "observations_above_budget_after_advice": 1240
+    }
+  }
+}

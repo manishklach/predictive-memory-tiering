@@ -28,3 +28,18 @@ Use `advice_errors` and `controller_disconnected` to diagnose a failed arena run
 ## Integration status
 
 The arena is a cooperative test workload. Live access sampling through the kernel module, the prefetch request ioctl, asynchronous swap-in, flash I/O attribution, and the representative EC2 workload campaign are separate milestones. Use this harness to check decisions, failure handling, and data integrity before connecting the compiled policy to those interfaces.
+
+### Reproducing the SQLite and swap-return checks
+
+Build pmtd with make. Capture requires APSW (the checked-in run used 3.54.1.0). From the repository root:
+
+~~~sh
+python3 traces/capture_sqlite.py /tmp/sqlite.csv /tmp/sqlite.json --period-seconds 305 --cycles 1
+python3 traces/replay_controller.py /tmp/sqlite.csv --out /tmp/decisions.json
+python3 harness/check_swap_return.py
+python3 harness/check_swap_return.py --pte-prefault
+~~~
+
+The compiled-controller replay preserves real timestamps and feeds its modeled residency back after each decision. The original fitted Python scorer remains available for historical replay. The scheduled scans demonstrate logical database page reuse. Physical anonymous-page sampling and actual swap traffic require separate measurements.
+
+On WSL, the default WILLNEED fixture observed a swap entry while mincore still reported residency. Its cold-return criterion was inconclusive. The separate POPULATE_READ fixture used page-table presence as its observation, induced a known swap-out, received a Markov prediction and restored the PTE before demand. All 4 KiB matched after return. Swap-cache residency was already true before advice, so this fixture provides no measurement of storage latency. [PTE evidence](../results/local-pte-return.json)

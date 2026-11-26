@@ -1,0 +1,11 @@
+{
+  "scope": "cooperative correctness fixture",
+  "kernel": "6.6.87.2-microsoft-standard-WSL2+",
+  "predicted_page": 1,
+  "advice": "POPULATE_READ",
+  "mincore_before_advice": true,
+  "pte_present_before_demand": true,
+  "swapped_before_advice": true,
+  "resident_before_demand": true,
+  "payload_verified_bytes": 4096
+}

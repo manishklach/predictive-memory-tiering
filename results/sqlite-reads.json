@@ -1,0 +1,16 @@
+{
+  "scope": "SQLite main-database VFS reads, synthetic data and scheduled scans",
+  "sqlite_version": "3.54.1",
+  "apsw_version": "3.54.1.0",
+  "period_seconds": 12,
+  "cycles": 2,
+  "trace_sha256": "e385033fcf2d4dafbd14584be680b213a520eb8fc50c4113271ec238bec2e236",
+  "reads": 2507,
+  "unique_pages": 258,
+  "duration_ns": 24015000000,
+  "pages_reused_after_gap_seconds": {
+    "10": 240,
+    "60": 0,
+    "300": 0
+  }
+}

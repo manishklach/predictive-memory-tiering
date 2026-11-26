@@ -70,3 +70,9 @@ The smaller Sydney recovery rehearsal started on November 26. [Startup evidence]
 The Sydney guest passed both EC2 health checks and exposed its login prompt over the authenticated serial console. [Recovery access evidence](results/sydney-recovery-access.json)
 
 On Sydney EC2 the development guest recovered from a deliberate panic. The team verified the panic message in the reassembled dump and recovered the earlier smoke log from a snapshot-derived volume. [Crash and restore observations](results/sydney-recovery-crash.json)
+
+## SQLite cold reuse and compiled-policy replay
+
+The local SQLite workload alternates hot-key lookups with full scans of synthetic records. SQLite's VFS records main-database reads using monotonic completion timestamps. In the 305-second capture, 240 of 258 distinct database pages returned after a gap of at least 300 seconds. These are logical file reads under a deliberately scheduled workload. [Capture manifest](results/sqlite-long.json)
+
+Offline replay now has an entry point that sends observations to the same compiled controller used by the cooperative arena. With a 129-page soft target, detector-only, stride, and Markov had 240, 128, and 219 modeled repeat misses respectively. All three exceeded the target on 1,240 observations and the simulator assumes immediate successful advice. [Compiled-controller results](results/sqlite-long-controller.json)
