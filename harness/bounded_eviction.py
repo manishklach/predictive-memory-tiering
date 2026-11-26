@@ -20,6 +20,8 @@ class BoundedEviction:
         self.followup = None
         self.capture = None
         self.predictor = None
+        self.swap_trace = None
+        self.idle_risk = None
         self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
@@ -79,6 +81,13 @@ class BoundedEviction:
         elif self.skip_swapped:
             # Walk beyond the top K to refill slots rejected by the last-moment PTE check.
             victims = sorted(eligible, key=self.last_read.__getitem__)
+        elif self.idle_risk is not None:
+            now = time.monotonic_ns()
+            def idle_score(i):
+                stamp = self.last_read[i]
+                age = ((now - stamp) // RECENT_NS).bit_length() if stamp else -1
+                return self.idle_risk.get(str(age), self.idle_risk["fallback"]), i
+            victims = nsmallest(budget, eligible, key=idle_score)
         elif self.lru:
             # Zero timestamps are unseen pages. nsmallest preserves address order on ties.
             victims = nsmallest(budget, eligible, key=self.last_read.__getitem__)
@@ -101,6 +110,8 @@ class BoundedEviction:
                         continue
                 self.backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * page, page)
                 self.advised[i] = time.monotonic_ns()
+                if self.swap_trace:
+                    self.swap_trace.mark(self.address + i * page, i)
                 self.stats["requests"] += 1
                 resident = (self.followup.immediate(i, self.advised[i]) if self.followup
                             else self.residency(i * page, 1)[0] & 1)

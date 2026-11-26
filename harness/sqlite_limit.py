@@ -35,6 +35,11 @@ from region_detector import RegionDetector
 
 
 def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
+    trace_enabled = mode.endswith('-faulttrace')
+    mode = mode.removesuffix('-faulttrace')
+    idle_only = mode == 'bounded-idle'
+    if idle_only:
+        mode = 'bounded-lru'
     profiled = binary is not None
     size = db.stat().st_size
     pages = size // PAGE
@@ -58,6 +63,9 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     if mode == "bounded-predictor":
         from page_reuse_predictor import load_fold
         bounded.predictor = load_fold(Path(os.environ["PMT_MODEL_DIR"]), seed)
+    if idle_only:
+        table = Path(os.environ["PMT_MODEL_DIR"]) / f"idle-{seed}.json"
+        bounded.idle_risk = json.loads(table.read_text())
     capture = None
     if mode == 'bounded-on' and os.environ.get('PMT_CANDIDATE_DIR'):
         from candidate_capture import CandidateCapture
@@ -183,7 +191,11 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     if os.environ.get("PMT_FAULT_PROFILE") == "1":
         from fault_profile import FaultProfile
         fault_probe = FaultProfile()
+    trace_result = None
     with context as monitor:
+        if trace_enabled:
+            from swap_trace import SwapTrace
+            bounded.swap_trace = SwapTrace()
         if fault_probe:
             memory_at_start = fault_probe.memory_breakdown()
             fault_start = fault_probe.snapshot()
@@ -207,6 +219,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
                 raise ValueError("incorrect query result")
             checksum += row[0]
         elapsed = time.perf_counter_ns() - start
+        if trace_enabled:
+            trace_result = bounded.swap_trace.finish()
         if bounded:
             bounded.finish(start + elapsed)
         if capture:
@@ -233,7 +247,7 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         ctl.stdin.close()
         if ctl.wait():
             raise RuntimeError("controller failed")
-    print(json.dumps(dict(p99_us=sorted(times)[(99 * requests + 99) // 100 - 1] / 1000,
+    print(json.dumps(dict(swap_faults=trace_result, p99_us=sorted(times)[(99 * requests + 99) // 100 - 1] / 1000,
                           queries_per_s=requests * 1e9 / elapsed, elapsed_ns=elapsed,
                           worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
                           memory_at_query_start=memory_at_start if fault_probe else None,
@@ -267,8 +281,8 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345,
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False):
-    bounded_trial = bounded_trial or selection_trial or scoring_trial or guard_trial or lru_trial or noswap_trial or predictor_trial
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False, swapfault_trial=False):
+    bounded_trial = bounded_trial or selection_trial or scoring_trial or guard_trial or lru_trial or noswap_trial or predictor_trial or swapfault_trial
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -357,6 +371,16 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         if noswap_trial or predictor_trial:
             orders = list(permutations(("bounded-on", "bounded-lru", "bounded-predictor" if predictor_trial else "bounded-noswap"))) * 2
             random.Random(1207).shuffle(orders)
+        if swapfault_trial:
+            from idle_folds import prepare_idle
+            prepare_idle(ROOT / "results/sydney-nvme-pilot", Path(directory))
+            os.environ["PMT_MODEL_DIR"] = directory
+            modes = ["bounded-lru", "bounded-idle", "bounded-lru-faulttrace", "bounded-idle-faulttrace"]
+            orders = []
+            rng = random.Random(1207)
+            for _ in range(3):
+                rng.shuffle(modes)
+                orders.extend(tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4))
         for pair, order in enumerate(orders):
             seed = 12345 + pair if extended or damos or live or live_score or live_profile or bounded_trial else 12345
             expected_checksum = control["checksum"] if seed == 12345 else None
@@ -403,6 +427,7 @@ if __name__ == "__main__":
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--scoring-trial", action="store_true", help="matched stock and fixed-range scoring-only runs with opaque SQLite payloads")
+        group.add_argument("--swapfault-trial", action="store_true", help="compare LRU and idle risk with and without swap fault probes")
         group.add_argument("--predictor-trial", action="store_true", help="compare held-out predictor with LRU and address order")
         group.add_argument("--noswap-trial", action="store_true", help="compare LRU skipping swap entries with current LRU and address order")
         group.add_argument("--lru-trial", action="store_true", help="compare address order and LRU within the selected region at a fixed 100 ms guard")
@@ -421,4 +446,4 @@ if __name__ == "__main__":
         args = parser.parse_args()
         if args.requests < 1:
             parser.error('--requests must be positive')
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial, args.swapfault_trial)
