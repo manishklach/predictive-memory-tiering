@@ -1,0 +1,200 @@
+{
+  "kernel": "6.6.87.2-microsoft-standard-WSL2+",
+  "sqlite": "3.45.1",
+  "apsw": "3.43.0.0",
+  "pages": 7018,
+  "requests": 3000,
+  "controller_sha256": "6ac3738770dc697bc9dd83bc2cd9f191e02f0ca35332c3f97ade2e4b2a3ac6a3",
+  "calibration": {
+    "mode": "stock",
+    "p99_us": 50.185,
+    "queries_per_s": 50343.44803685221,
+    "elapsed_ns": 59590674,
+    "reads": 7258,
+    "pageout_requests": 0,
+    "checksum": 10492491,
+    "peak_bytes": 38555648,
+    "swap_peak_bytes": 0,
+    "memory_events": [
+      "low 0",
+      "high 0",
+      "max 0",
+      "oom 0",
+      "oom_kill 0",
+      "oom_group_kill 0"
+    ]
+  },
+  "memory_max_bytes": 19275776,
+  "runs": [
+    {
+      "pair": 1,
+      "mode": "stock",
+      "p99_us": 664.471,
+      "queries_per_s": 9436.85519442965,
+      "elapsed_ns": 317902515,
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 29581312,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 142",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 1,
+      "mode": "detector",
+      "p99_us": 2952.818,
+      "queries_per_s": 642.0512113760408,
+      "elapsed_ns": 4672524476,
+      "reads": 7258,
+      "pageout_requests": 7238,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30822400,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 140",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "detector",
+      "p99_us": 3207.775,
+      "queries_per_s": 639.1520855037207,
+      "elapsed_ns": 4693718550,
+      "reads": 7258,
+      "pageout_requests": 7238,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30920704,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 149",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "stock",
+      "p99_us": 758.099,
+      "queries_per_s": 10241.47576880147,
+      "elapsed_ns": 292926534,
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31031296,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 134",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "stock",
+      "p99_us": 828.877,
+      "queries_per_s": 8626.427196012533,
+      "elapsed_ns": 347768541,
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 29982720,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 139",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "detector",
+      "p99_us": 3049.773,
+      "queries_per_s": 617.7840423505047,
+      "elapsed_ns": 4856065865,
+      "reads": 7258,
+      "pageout_requests": 7241,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30515200,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 143",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "detector",
+      "p99_us": 7824.023,
+      "queries_per_s": 479.00071009811535,
+      "elapsed_ns": 6263038732,
+      "reads": 7258,
+      "pageout_requests": 7241,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31858688,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 136",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "stock",
+      "p99_us": 577.132,
+      "queries_per_s": 11451.006589664958,
+      "elapsed_ns": 261985702,
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 29925376,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 138",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    }
+  ],
+  "median": {
+    "stock": {
+      "p99_us": 711.2850000000001,
+      "queries_per_s": 9839.16548161556
+    },
+    "detector": {
+      "p99_us": 3128.7740000000003,
+      "queries_per_s": 628.4680639271128
+    }
+  }
+}

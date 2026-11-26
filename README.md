@@ -84,3 +84,16 @@ The WSL anonymous arena charged 17,039,360 peak bytes to its calibration cgroup.
 A target-scoped smaps fixture identified known region touches and fed the observations to the compiled controller. A separate instrumented stride run observed 4,096 task read bytes across a WILLNEED syscall on a nonresident anonymous page and observed residency before returning to the workload. This verifies a cooperative return path on WSL swap. Module-originated live sampling and EC2 NVMe benchmarks remain open. [Region observations](results/local-regions.json) · [Prefetch evidence](results/local-cold-io.json)
 
 On the Sydney development guest, the synthetic module completed 100 load/unload cycles on kernel 7.0.0-1018-aws with zero trace drops. Secure Boot was disabled. Taint flags included unsigned and out-of-tree module flags, and the running kernel configuration disabled DAMON. [Host audit](results/sydney-compat-host.json) · [Smoke evidence](results/sydney-compat-smoke.json)
+
+## Local SQLite comparison at the 50% memory limit
+
+Stock Linux handled this workload faster in all four pairs. Each run issued the same 3,000 single-client indexed lookups against 14,000 synthetic SQLite records, alternating between a 64-key hot set and the full table. The table reports medians across runs, with the full observed range in parentheses.
+
+| Mode | Per-query p99, ms | Throughput, queries/s |
+| --- | ---: | ---: |
+| Stock Linux reclaim | 0.711 (0.577–0.829) | 9,839 (8,626–11,451) |
+| Detector-only, prefetch off | 3.129 (2.953–7.824) | 628 (479–642) |
+
+Both modes used the same read-only SQLite VFS backed by anonymous memory on WSL2. Each received a fresh cgroup with a 19,275,776-byte RAM limit, half the unconstrained stock peak rounded down to a page. Swap was active in every limited run. The detector shared the application's cgroup. For each logical page read it synchronously queried residency, sent the full residency map to pmtd, waited for advice, and requested page-out when advised. The timing includes those costs. The experiment measures this complete prototype path. It does not isolate scoring cost or measure EC2 NVMe performance.
+
+Run order alternated by pair. Each query result was checked against its expected key and payload length. For reproduction on Linux with cgroup v2, swap, and Python APSW, build with `make pmtd`, then run `sudo /usr/bin/python3 harness/sqlite_limit.py results/local-sqlite-50.json`. [Harness](harness/sqlite_limit.py) · [Calibration and individual runs](results/local-sqlite-50.json)
