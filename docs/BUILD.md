@@ -44,3 +44,18 @@ Idle and scored policies fall back to demand LRU eviction when they cannot free 
 M0 needs an authorized dedicated EC2 T0 environment to exercise the pinned kernel, kdump, serial console, and snapshot restore. For later kernel work, verify the exact Ubuntu kernel's available interfaces before choosing the module integration. Upstream Linux documents target-region `pageout` and `willneed` actions for DAMON's virtual-address operations, which provide a concrete path for an upstream baseline. [Linux 6.8 DAMON usage](https://docs.kernel.org/6.8/admin-guide/mm/damon/usage.html)
 
 The local M1 prototype has synthetic checks and a replay report from a real algorithm. It still needs representative, long-running application traces and calibrated timing inputs before replay can inform the EC2 campaign. The synthetic M2 module and reader have local build checks. Live prediction and G1–G4 measurements remain open.
+## Building the DAMON-capable AWS test kernel
+
+Use Ubuntu 24.04 amd64. Resolve the source from `linux-modules-7.0.0-1018-aws` and use the matching ABI-specific headers package as the source of the AWS configuration. For the November 26 experiment both packages resolve to version `7.0.0-1018.19~24.04.1`. Enable Noble deb-src indexes before running the source download.
+
+~~~bash
+apt-get source linux-aws-7.0=7.0.0-1018.19~24.04.1
+apt-get download linux-headers-7.0.0-1018-aws=7.0.0-1018.19~24.04.1
+dpkg-deb -x linux-headers-7.0.0-1018-aws_*.deb base
+bash /path/to/pmt/harness/build_damon_kernel.sh linux-aws-7.0-7.0.0 \
+  base/usr/src/linux-headers-7.0.0-1018-aws/.config out
+~~~
+
+The build uses GCC 13, standard kernel build dependencies, Debian packaging tools and six parallel compiler jobs by default. It applies the checked-in two-line fix for an undeclared identifier in `damon_set_regions()`. The upstream packaging target gives the build its own kernel release and produces installable image and header packages next to the output directory. The config delta records changes caused by disabling DWARF/BTF to fit the local build disk, including loss of BTF-dependent features. Keep comparisons on the same custom build. [Config delta](../results/sydney-damon/config.diff)
+
+On the dedicated Secure Boot-disabled EC2 guest, `harness/install_damon_kernel.sh IMAGE.deb HEADERS.deb` installs both packages, holds them, sets the original AWS kernel as the GRUB fallback, and configures a one-time custom boot. After reboot, verify the running release, audit the host, and run `sudo python3 harness/check_damos.py` with swap active and an unused DAMON admin interface. The probe monitors its own child process, requests page-out for cold regions, records kernel scheme counters and process swap usage, and reads back the mapping to verify its contents.
