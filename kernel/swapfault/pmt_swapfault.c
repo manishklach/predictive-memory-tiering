@@ -116,6 +116,7 @@ static ssize_t mark(struct file *file, const char __user *buf, size_t size,
 static int trace_close(struct inode *inode, struct file *file)
 {
 	unregister_kretprobe(&probe);
+	probe.kp.addr = NULL;
 	atomic_set(&owner, 0);
 	return single_release(inode, file);
 }
@@ -144,4 +145,5 @@ module_init(start);
 module_exit(stop);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Bounded PMT swap-fault diagnostic");
+
 
