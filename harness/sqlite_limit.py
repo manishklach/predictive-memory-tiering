@@ -198,6 +198,8 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
     try:
         if limit:
             (group / "memory.max").write_text(str(limit))
+            if "PMT_ZSWAP_MAX_BYTES" in os.environ:
+                (group / "memory.zswap.max").write_text(str(int(os.environ["PMT_ZSWAP_MAX_BYTES"])))
         def enter():
             (group / "cgroup.procs").write_text(str(os.getpid()))
         raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, str(interval), str(score_interval), str(seed), *([binary] if binary else [])],
@@ -287,6 +289,9 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
                           for metric in ("p99_us", "queries_per_s")} for mode in orders[0]}
         output.write_text(json.dumps(dict(kernel=platform.release(), sqlite=apsw.sqlitelibversion(),
                              page_cluster=int(Path("/proc/sys/vm/page-cluster").read_text()),
+                             zswap_cap_bytes=os.environ.get("PMT_ZSWAP_MAX_BYTES"),
+                             zswap_enabled=Path("/sys/module/zswap/parameters/enabled").read_text().strip()
+                                if Path("/sys/module/zswap/parameters/enabled").exists() else None,
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
                              profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
