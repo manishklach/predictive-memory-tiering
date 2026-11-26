@@ -49,10 +49,10 @@ def worker(db, mode, binary, interval, score_interval, seed):
     ctl = None
     inline = mode in ("scoring-only", "detector-inline")
     bounded = None
-    if mode == "bounded-on":
+    if mode in ("bounded-on", "bounded-legacy"):
         from bounded_eviction import BoundedEviction
-        bounded = BoundedEviction(backing, address, libc)
-    observe = mode not in ("stock", "damos", "live", "live-score", "bounded-off", "bounded-on")
+        bounded = BoundedEviction(backing, address, libc, protect_recent=mode == "bounded-on")
+    observe = mode not in ("stock", "damos", "live", "live-score", "bounded-off", "bounded-on", "bounded-legacy")
     if inline:
         lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
         ptr = ctypes.c_void_p
@@ -146,11 +146,11 @@ def worker(db, mode, binary, interval, score_interval, seed):
     for stage in profile:
         profile[stage] = 0
     stats = None
-    detector = RegionDetector() if mode in ("live-score", "bounded-off", "bounded-on") else None
+    detector = RegionDetector() if mode in ("live-score", "bounded-off", "bounded-on", "bounded-legacy") else None
     context = nullcontext()
     if mode == "damos":
         context = pageout(os.getpid(), address, size)
-    elif mode in ("bounded-off", "bounded-on"):
+    elif mode in ("bounded-off", "bounded-on", "bounded-legacy"):
         ranges = [(address, address + size)]
         context = sampling(os.getpid(), ranges, detector, buffer_kb=32)
     elif mode in ("live", "live-score"):
@@ -178,6 +178,8 @@ def worker(db, mode, binary, interval, score_interval, seed):
                 raise ValueError("incorrect query result")
             checksum += row[0]
         elapsed = time.perf_counter_ns() - start
+        if bounded:
+            bounded.finish(start + elapsed)
         used = resource.getrusage(resource.RUSAGE_SELF)
         if fault_probe:
             fault_end = fault_probe.snapshot()
@@ -230,7 +232,8 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial):
+    bounded_trial = bounded_trial or selection_trial
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -300,6 +303,13 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         if bounded_trial:
             orders = list(permutations(("stock", "bounded-off", "bounded-on"))) * 2
             random.Random(1207).shuffle(orders)
+        if selection_trial:
+            modes = ["stock", "bounded-off", "bounded-on", "bounded-legacy"]
+            orders = []
+            rng = random.Random(1207)
+            for block in range(3):
+                rng.shuffle(modes)
+                orders.extend(tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4))
         for pair, order in enumerate(orders):
             seed = 12345 + pair if extended or damos or live or live_score or live_profile or bounded_trial else 12345
             expected_checksum = control["checksum"] if seed == 12345 else None
@@ -343,6 +353,7 @@ if __name__ == "__main__":
         parser.add_argument("output", type=Path)
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--selection-trial", action="store_true", help="add an unguarded eviction control to the bounded trial")
         group.add_argument("--bounded-trial", action="store_true", help="compare stock and live scoring with bounded page-out off/on")
         group.add_argument("--live-profile", action="store_true", help="profile stock, live sampling and live scoring across twelve matched seeds")
         group.add_argument("--live-score", action="store_true", help="rank live region samples during SQLite queries")
@@ -354,4 +365,4 @@ if __name__ == "__main__":
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial)
