@@ -1,0 +1,110 @@
+{
+  "source_sha256": "a96e4a74e4a7d213f4d0db270670b347c46947186a27f3bf00fdf4b40833c153",
+  "validation": "leave-one-seed-out",
+  "folds": {
+    "12345": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 6,
+      "lru": 12,
+      "predictor": 11,
+      "oracle": 0
+    },
+    "12346": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 15,
+      "lru": 13,
+      "predictor": 13,
+      "oracle": 0
+    },
+    "12347": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 9,
+      "lru": 14,
+      "predictor": 9,
+      "oracle": 2
+    },
+    "12348": {
+      "epochs": 5,
+      "selections": 64,
+      "address": 15,
+      "lru": 14,
+      "predictor": 10,
+      "oracle": 0
+    },
+    "12349": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 13,
+      "lru": 10,
+      "predictor": 15,
+      "oracle": 0
+    },
+    "12350": {
+      "epochs": 6,
+      "selections": 64,
+      "address": 14,
+      "lru": 14,
+      "predictor": 12,
+      "oracle": 3
+    },
+    "12351": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 16,
+      "lru": 9,
+      "predictor": 10,
+      "oracle": 0
+    },
+    "12352": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 13,
+      "lru": 18,
+      "predictor": 10,
+      "oracle": 0
+    },
+    "12353": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 11,
+      "lru": 16,
+      "predictor": 10,
+      "oracle": 0
+    },
+    "12354": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 13,
+      "lru": 17,
+      "predictor": 8,
+      "oracle": 0
+    },
+    "12355": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 18,
+      "lru": 18,
+      "predictor": 16,
+      "oracle": 0
+    },
+    "12356": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 10,
+      "lru": 10,
+      "predictor": 12,
+      "oracle": 0
+    }
+  },
+  "totals": {
+    "epochs": 51,
+    "selections": 768,
+    "address": 153,
+    "lru": 165,
+    "predictor": 136,
+    "oracle": 5
+  }
+}

@@ -563,3 +563,20 @@ Every selector chose the same number of pages from the same candidate set at eac
 The oracle improved on address order at 100 ms on all 12 seeds. That leaves a measurable target for a predictor using only information available before eviction. These are counterfactual selections on the instrumented address-order trajectory. Changing the live policy could change later residency, timing and candidate sets. Capture adds read logging and pagemap probes, so these timings do not establish a throughput gate or a formal T1 result.
 
 [Candidate records](results/sydney-nvme-pilot/candidate-headroom/candidates.jsonl.gz) · [Per-seed counts](results/sydney-nvme-pilot/candidate-headroom/counts.json) · [SQLite run metrics](results/sydney-nvme-pilot/candidate-headroom/sqlite.json) · [Replay code](harness/candidate_replay.py)
+
+### Held-out page-level reuse prediction
+
+On the Sydney pilot capture, a page-level predictor reduced 100 ms early reuse from 153 to 136 pages across 768 selections. Each of the 12 SQLite seeds served as the held-out seed once. The predictor trained on the other 11 seeds and ranked the held-out candidates by estimated reuse risk, choosing the lowest-risk pages. All four policies received identical candidates and budgets at each of the 51 decisions.
+
+| Selector | Pages reused within 100 ms | Rate |
+|---|---:|---:|
+| Address order | 153/768 | 19.92% |
+| LRU | 165/768 | 21.48% |
+| Page-level predictor | 136/768 | 17.71% |
+| Future-aware oracle | 5/768 | 0.65% |
+
+The predictor beat address order on eight seeds, tied on one and lost on three. It recovered 17 of the 148 selections the oracle could improve (11.5%). The model estimates reuse frequency from pre-advice PTE state, time since the last read (doubling buckets, with unseen pages separate), and the aligned 128-page database range. Each more specific estimate shrinks toward the broader estimate with weight 32. Address order resolves score ties. Subsequent reads supply training and evaluation labels only.
+
+All seeds share the same database layout, so the address feature may learn layout-specific patterns. This offline comparison uses the observed address-order trajectory and does not measure live throughput, p99, or responses to different eviction choices.
+
+Reproduce with `python harness/page_reuse_predictor.py results/sydney-nvme-pilot/candidate-headroom predictor.json`. [Per-seed results](results/sydney-nvme-pilot/candidate-headroom/predictor.json)
