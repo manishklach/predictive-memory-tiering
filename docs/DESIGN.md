@@ -8,12 +8,12 @@ Sampling is periodic. The planned implementation evaluates page-table accessed b
 
 ## Trace and control path
 
-The prototype trace module uses a bounded FIFO and a versioned 24-byte record. It exposes a root-only reader device, sysfs controls, and debugfs counters. Recorded page IDs are synthetic sequence numbers. The module retains the target's kernel PID reference and disables emission on target exit, reader disconnect, or an injected test failure. The C reader consumes records and emits JSON Lines. It can pin itself to a CPU for tests.
+The prototype trace module uses a bounded ring and a versioned 24-byte record. It exposes a root-only reader device, sysfs controls, and debugfs counters. Recorded page IDs are synthetic sequence numbers. The module retains the target's kernel PID reference and disables emission on target exit, reader disconnect, or an injected test failure. The C reader consumes records through `read(2)` or a read-only mapping with a cursor-advance ioctl and emits JSON Lines. It can pin itself to a CPU for tests.
 
-The planned live interface uses a memory-mapped ring for trace export and an ioctl for bounded prefetch batches. It needs explicit accounting for drops, completed and late prefetches, wasted pages, bytes read and written, and self-disable events. Kernel support and module-accessible APIs must be verified against the selected Ubuntu EC2 kernel before the real page-out and prefetch paths are finalized.
+The planned live interface adds an ioctl for bounded prefetch batches and accounting for completed and late prefetches, wasted pages, and bytes read and written. The ring already counts drops and automatic disables. Kernel support and module-accessible APIs must be verified against the selected Ubuntu EC2 kernel before the real page-out and prefetch paths are finalized.
 
 ## Prediction and backpressure
 
-The replay engine implements stride and bounded Markov predictors. Live `pmtd` will train from observed accesses and use no future trace data. An EC2 campaign must pin the daemon to one core and record its CPU quota, training and inference time, and memory use. A larger model is justified only if Markov misses show structured and measurable headroom.
+The replay engine and cooperative `pmtd` both implement stride and bounded Markov predictors that consume observed accesses in order. The cooperative workload submits advice to Linux on its own anonymous arena while kernel integration is pending. An EC2 campaign must pin the daemon to one core and record its CPU quota, training and inference time, and memory use. A larger model is justified only if Markov misses show structured and measurable headroom. [Cooperative runtime](LOCAL-RUNTIME.md)
 
 Each prefetch batch has a configured request cap and deadline. A request must fit within DRAM headroom and refer to a page on the tier. A completed page is useful if demand reaches it before eviction. A late completion still leaves a demand stall. When the daemon disappears or the module self-disables, proactive work should stop within a sampling interval. Existing swapped pages remain accessible through the stock path.

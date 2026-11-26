@@ -9,7 +9,17 @@ make test
 make module
 ```
 
-`make test` builds the C trace reader and runs the ABI fixture and replay tests. `make module` builds with `W=1` against the running kernel's build tree by default. Set `KDIR=/path/to/build/tree` to compile against another prepared kernel. The C reader shares a fixed-size ABI header with the module and supports CPU affinity through `-c`. This build uses synthetic records. See [the EC2 runbook](RUNBOOK.md) for module runtime checks.
+`make test` builds the C trace reader, controller, and Linux arena, and runs ABI, policy, fallback, and replay checks. `make module` builds with `W=1` against the running kernel's build tree by default. Set `KDIR=/path/to/build/tree` to compile against another prepared kernel. The C reader shares a fixed-size ABI header with the module and supports CPU affinity through `-c`. Kernel records are synthetic. [Cooperative runtime](LOCAL-RUNTIME.md) · [EC2 runbook](RUNBOOK.md)
+
+### Isolated kernel test
+
+With QEMU, cpio, a static BusyBox binary, and the boot image matching `KDIR`, run:
+
+```sh
+KDIR=/path/to/kernel/build sh harness/qemu_smoke.sh /path/to/bzImage /path/to/static/busybox
+```
+
+The guest exercises the read and mmap transports and performs 101 load/unload cycles. It boots a temporary RAM image with networking disabled and records the serial log under `/tmp` by default. This is a local correctness test. Formal M2 acceptance remains on the pinned EC2 kernel.
 
 ## Trace replay
 

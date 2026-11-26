@@ -1,5 +1,6 @@
 __pycache__/
 /pmtd
+/pmt-local
 /kernel/*.o
 /kernel/*.ko
 /kernel/*.mod

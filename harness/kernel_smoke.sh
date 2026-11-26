@@ -63,17 +63,24 @@ enable_when_reader_ready
 wait "$reader"
 reader=
 test "$(cat "$state/enabled")" = 0
+./pmtd -m -n 4 >> "$work/trace.jsonl" &
+reader=$!
+enable_when_reader_ready
+wait "$reader"
+reader=
+test "$(cat "$state/enabled")" = 0
 python3 - "$work/trace.jsonl" "$target" <<'PY'
 import json
 from pathlib import Path
 import sys
 
 events = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines()]
-assert len(events) == 4
+assert len(events) == 8
 assert all(event["pid"] == int(sys.argv[2]) for event in events)
 assert all(event["access_type"] == "synthetic" for event in events)
-assert all(right["page_id"] == left["page_id"] + 1
-           for left, right in zip(events, events[1:]))
+for batch in (events[:4], events[4:]):
+    assert all(right["page_id"] == left["page_id"] + 1
+               for left, right in zip(batch, batch[1:]))
 PY
 
 ./pmtd -n 100 -t 10000 > /dev/null &
@@ -82,7 +89,7 @@ enable_when_reader_ready
 echo 1 > "$state/inject_failure"
 test "$(cat "$state/enabled")" = 0
 cat "$stats" > "$work/status"
-awk '$1 == "self_disables" && $2 == 2 { found = 1 } END { exit !found }' "$work/status"
+awk '$1 == "self_disables" && $2 == 3 { found = 1 } END { exit !found }' "$work/status"
 cat "$work/status"
 kill "$reader"
 wait "$reader" 2>/dev/null || true

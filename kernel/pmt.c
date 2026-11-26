@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
+#include <linux/compat.h>
 #include <linux/debugfs.h>
 #include <linux/fs.h>
-#include <linux/kfifo.h>
 #include <linux/ktime.h>
 #include <linux/miscdevice.h>
+#include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/pid.h>
@@ -12,18 +13,19 @@
 #include <linux/sched.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
+#include <linux/vmalloc.h>
 #include <linux/workqueue.h>
 
 #include "pmt_uapi.h"
 
 static DEFINE_MUTEX(pmt_lock);
 static DECLARE_WAIT_QUEUE_HEAD(pmt_wait);
-static DEFINE_KFIFO(pmt_events, struct pmt_event, 256);
+static struct pmt_ring *pmt_ring;
 static struct dentry *pmt_debugfs;
 static struct pid *pmt_target;
 static bool pmt_enabled;
 static bool pmt_reader;
-static bool pmt_readable;
+static bool pmt_mapped;
 static unsigned int pmt_interval_ms = 500;
 static u64 pmt_sequence;
 static u64 pmt_emitted;
@@ -32,6 +34,26 @@ static u64 pmt_self_disables;
 
 static void pmt_sample(struct work_struct *work);
 static DECLARE_DELAYED_WORK(pmt_work, pmt_sample);
+
+static u32 pmt_queued(void)
+{
+	/* Observe consumer-side progress before checking for reusable slots. */
+	u32 consumer = smp_load_acquire(&pmt_ring->consumer);
+
+	/* Pair with publication of the records before reporting readiness. */
+	return smp_load_acquire(&pmt_ring->producer) - consumer;
+}
+
+static void pmt_set_consumer(u32 next)
+{
+	/* Publish completed consumption before exposing the new cursor. */
+	smp_store_release(&pmt_ring->consumer, next);
+}
+
+static void pmt_discard(void)
+{
+	pmt_set_consumer(pmt_ring->producer);
+}
 
 static bool pmt_target_alive(void)
 {
@@ -58,6 +80,7 @@ static void pmt_disable(const char *reason)
 static void pmt_sample(struct work_struct *work)
 {
 	struct pmt_event event;
+	u32 producer;
 
 	mutex_lock(&pmt_lock);
 	if (!pmt_enabled)
@@ -71,9 +94,12 @@ static void pmt_sample(struct work_struct *work)
 	event.pid = pid_nr(pmt_target);
 	event.abi = PMT_TRACE_ABI;
 	event.access_type = PMT_ACCESS_SYNTHETIC;
-	if (kfifo_put(&pmt_events, event)) {
+	if (pmt_queued() < PMT_TRACE_CAPACITY) {
+		producer = pmt_ring->producer;
+		pmt_ring->records[producer % PMT_TRACE_CAPACITY] = event;
+		/* Userspace may read the slot after acquiring the new producer cursor. */
+		smp_store_release(&pmt_ring->producer, producer + 1);
 		pmt_emitted++;
-		WRITE_ONCE(pmt_readable, true);
 		wake_up_interruptible(&pmt_wait);
 	} else {
 		pmt_dropped++;
@@ -122,8 +148,7 @@ static ssize_t target_pid_store(struct device *dev,
 	}
 	old = pmt_target;
 	pmt_target = target;
-	kfifo_reset(&pmt_events);
-	WRITE_ONCE(pmt_readable, false);
+	pmt_discard();
 	mutex_unlock(&pmt_lock);
 	put_pid(old);
 	return count;
@@ -216,8 +241,7 @@ static int pmt_open(struct inode *inode, struct file *file)
 	if (pmt_reader) {
 		ret = -EBUSY;
 	} else {
-		kfifo_reset(&pmt_events);
-		WRITE_ONCE(pmt_readable, false);
+		pmt_discard();
 		pmt_reader = true;
 	}
 	mutex_unlock(&pmt_lock);
@@ -228,6 +252,7 @@ static int pmt_release(struct inode *inode, struct file *file)
 {
 	mutex_lock(&pmt_lock);
 	pmt_reader = false;
+	WRITE_ONCE(pmt_mapped, false);
 	pmt_disable("trace reader closed");
 	mutex_unlock(&pmt_lock);
 	return 0;
@@ -237,6 +262,7 @@ static ssize_t pmt_read(struct file *file, char __user *buf, size_t count,
 			loff_t *pos)
 {
 	struct pmt_event event;
+	u32 consumer;
 	int ret;
 
 	if (!count)
@@ -247,11 +273,16 @@ static ssize_t pmt_read(struct file *file, char __user *buf, size_t count,
 	for (;;) {
 		if (mutex_lock_interruptible(&pmt_lock))
 			return -ERESTARTSYS;
-		if (kfifo_peek(&pmt_events, &event)) {
+		if (pmt_mapped) {
+			mutex_unlock(&pmt_lock);
+			return -EBUSY;
+		}
+		if (pmt_queued()) {
+			consumer = pmt_ring->consumer;
+			event = pmt_ring->records[consumer % PMT_TRACE_CAPACITY];
 			ret = -EFAULT;
 			if (!copy_to_user(buf, &event, sizeof(event))) {
-				kfifo_skip(&pmt_events);
-				WRITE_ONCE(pmt_readable, !kfifo_is_empty(&pmt_events));
+				pmt_set_consumer(consumer + 1);
 				ret = sizeof(event);
 			}
 			mutex_unlock(&pmt_lock);
@@ -260,7 +291,7 @@ static ssize_t pmt_read(struct file *file, char __user *buf, size_t count,
 		mutex_unlock(&pmt_lock);
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
-		ret = wait_event_interruptible(pmt_wait, READ_ONCE(pmt_readable));
+		ret = wait_event_interruptible(pmt_wait, pmt_queued() || READ_ONCE(pmt_mapped));
 		if (ret)
 			return ret;
 	}
@@ -269,9 +300,52 @@ static ssize_t pmt_read(struct file *file, char __user *buf, size_t count,
 static __poll_t pmt_poll(struct file *file, poll_table *wait)
 {
 	poll_wait(file, &pmt_wait, wait);
-	if (READ_ONCE(pmt_readable))
+	if (pmt_queued())
 		return EPOLLIN | EPOLLRDNORM;
 	return 0;
+}
+
+static int pmt_mmap(struct file *file, struct vm_area_struct *area)
+{
+	int ret;
+
+	/* A shared mapping on an O_RDONLY descriptor can lack VM_SHARED. */
+	if (area->vm_pgoff || area->vm_end - area->vm_start != PAGE_ALIGN(sizeof(*pmt_ring)) ||
+	    !(area->vm_flags & VM_MAYSHARE) || (area->vm_flags & (VM_WRITE | VM_EXEC)))
+		return -EINVAL;
+	vm_flags_clear(area, VM_MAYWRITE | VM_MAYEXEC);
+	vm_flags_set(area, VM_DONTEXPAND | VM_DONTDUMP);
+	mutex_lock(&pmt_lock);
+	ret = remap_vmalloc_range(area, pmt_ring, 0);
+	if (!ret) {
+		WRITE_ONCE(pmt_mapped, true);
+		wake_up_interruptible(&pmt_wait);
+	}
+	mutex_unlock(&pmt_lock);
+	return ret;
+}
+
+static long pmt_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	struct pmt_consume consumed;
+	int ret = 0;
+
+	if (cmd != PMT_TRACE_CONSUME)
+		return -ENOTTY;
+	if (copy_from_user(&consumed, (void __user *)arg, sizeof(consumed)))
+		return -EFAULT;
+	if (!consumed.count || consumed.count > PMT_TRACE_CAPACITY)
+		return -EINVAL;
+
+	mutex_lock(&pmt_lock);
+	if (!pmt_mapped)
+		ret = -EINVAL;
+	else if (pmt_ring->consumer != consumed.expected || pmt_queued() < consumed.count)
+		ret = -EAGAIN;
+	else
+		pmt_set_consumer(consumed.expected + consumed.count);
+	mutex_unlock(&pmt_lock);
+	return ret;
 }
 
 static const struct file_operations pmt_fops = {
@@ -280,6 +354,11 @@ static const struct file_operations pmt_fops = {
 	.release = pmt_release,
 	.read = pmt_read,
 	.poll = pmt_poll,
+	.mmap = pmt_mmap,
+	.unlocked_ioctl = pmt_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = compat_ptr_ioctl,
+#endif
 };
 
 static struct miscdevice pmt_device = {
@@ -302,10 +381,18 @@ DEFINE_SHOW_ATTRIBUTE(pmt_stats);
 
 static int __init pmt_init(void)
 {
-	int ret = misc_register(&pmt_device);
+	int ret;
 
-	if (ret)
+	pmt_ring = vmalloc_user(PAGE_ALIGN(sizeof(*pmt_ring)));
+	if (!pmt_ring)
+		return -ENOMEM;
+	pmt_ring->abi = PMT_TRACE_ABI;
+	pmt_ring->capacity = PMT_TRACE_CAPACITY;
+	ret = misc_register(&pmt_device);
+	if (ret) {
+		vfree(pmt_ring);
 		return ret;
+	}
 	pmt_debugfs = debugfs_create_dir("pmt", NULL);
 	debugfs_create_file("stats", 0400, pmt_debugfs, NULL, &pmt_stats_fops);
 	return 0;
@@ -320,6 +407,7 @@ static void __exit pmt_exit(void)
 	mutex_unlock(&pmt_lock);
 	cancel_delayed_work_sync(&pmt_work);
 	put_pid(pmt_target);
+	vfree(pmt_ring);
 }
 
 module_init(pmt_init);
