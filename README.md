@@ -357,3 +357,24 @@ To reproduce on the pinned T0 host, build with `make test libpmt-profile.so` and
 Readiness notifications removed the largest measured reader cost. Median wait CPU fell 91%, and voluntary context switches across the SQLite worker fell from 1,724 to 970 per run. The reader stayed active in every timed run, scored 73 epochs, and selected the cold range in all 48 settled fixture decisions. All 72 timed runs passed paired checksums, used swap and recorded zero PMT page-out requests and zero OOM kills.
 
 The CPU saving did not yield a throughput gain. In the second pass, live scoring delivered 5.3% fewer queries/s than sampling only and 16.5% fewer than stock. Its median p99 was 5.7% higher than sampling only and 8.4% lower than stock. Sampling-only throughput also moved from 4,617 to 4,185 queries/s between passes despite identical sampling settings. These separate passes establish a reader CPU reduction; the cause of the remaining end-to-end gap is unresolved.
+
+### Swap wait during SQLite on Sydney T0
+
+Each pass ran the same 12 seeds (12345–12356) at 19,529,728 bytes, with 3,000 queries per arm and all six arm orders twice. The live arms used 32 KiB of trace buffer per CPU. PMT page-out remained disabled. Linux reclaim and EBS-backed swap stayed active.
+
+| Pass | Arm | p99 (ms) | Queries/s | Minor / major faults | Direct pages scanned / reclaimed | Block I/O delay (ms) | Swap-in delay (ms) | Reclaim delay (ms) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Before | Linux | 1.243 | 4,228 | 163.5 / 871.5 | 2001 / 995 | 615.3 | 3.5 | 2.7 |
+| Before | Sampling only | 1.160 | 3,936 | 147.5 / 885 | 1856 / 979.5 | 673.4 | 3.6 | 4.0 |
+| Before | Live scoring | 1.163 | 3,950 | 163 / 923 | 1739.5 / 1023 | 666.0 | 3.5 | 3.6 |
+| After | Linux | 0.947 | 10,889 | 66 / 873 | 1055.5 / 985 | 211.0 | 3.5 | 3.5 |
+| After | Sampling only | 0.943 | 10,320 | 119 / 896 | 1097.5 / 1035 | 238.0 | 3.7 | 2.5 |
+| After | Live scoring | 0.912 | 9,350 | 102 / 931 | 1147.5 / 1079.5 | 244.7 | 3.7 | 9.4 |
+
+Table entries are medians of per-seed query-loop measurements. TASKSTATS measures swap-in, synchronous block-I/O and direct-reclaim delays on the SQLite main thread. These clocks can overlap. Process faults include the reader thread. Direct page counts come from the worker cgroup and swap traffic from host-wide vmstat deltas. Snapshots bracket the query timer and exclude workload setup and monitor teardown. [Per-seed baseline](results/sydney-damon/formal/fault-profile-before.json) · [Per-seed rerun](results/sydney-damon/formal/fault-profile-after.json)
+
+Before used EBS swap with zswap off. After enabled Linux zswap for all three arms with a 262,144-byte compressed-pool limit per worker cgroup and the original memory.max. Swap readahead stayed at page-cluster 3. With scoring active, median host disk swap-in fell from 986.5 to 352.5 pages per query loop. The worker cgroup recorded a median 618 zswap loads. Major faults barely changed (923 to 931), while synchronous block-I/O delay fell 63% and throughput increased 2.37-fold. The separate swap-in delay counter stayed near 3.5 ms. These measurements identify the cost of servicing faults as the more important change for this workload.
+
+Linux alone also benefited from compression. With zswap on, scoring had 3.7% lower median p99 and 14.1% lower throughput than Linux alone. The shorter scored runs each completed two or three 100 ms epochs, 29 total, with five candidate epochs. All 72 timed runs used swap, matched paired query checksums, issued zero PMT page-out requests and recorded zero OOM kills. SQLite rows contain 1,500-byte zero-filled payloads, which favor compression. The compressed-cache result applies to this T0 fixture. Formal NVMe runs retain the zswap-off requirement.
+
+To reproduce on the disposable T0 guest, enable kernel.task_delayacct before starting workers and build with `make test libpmt-profile.so`. Run `PMT_FAULT_PROFILE=1 /usr/bin/python3 harness/sqlite_limit.py before.json --live-profile --paired-calibration results/sydney-damon/formal/live-profile-before.json` as root with zswap off at 327f81b. At 9f1bd56, enable zswap through /sys/module/zswap/parameters/enabled and repeat with PMT_ZSWAP_MAX_BYTES=262144 and a distinct output path. Restore both host settings afterward. The published rerun restored zswap to off before archiving. [Linux delay accounting](https://docs.kernel.org/accounting/delay-accounting.html)
