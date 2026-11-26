@@ -17,6 +17,8 @@ class ResidencyFollowup:
         self.selector = selector
         self.fd = os.open("/proc/self/pagemap", os.O_RDONLY | os.O_CLOEXEC)
         self.pending = []
+        self.confirmed = 0
+        self.outstanding = 0
         self.pages = {}
 
     def sample(self, page):
@@ -38,6 +40,7 @@ class ResidencyFollowup:
         record = self.sample(page)
         record["delay_us"] = (time.monotonic_ns() - when) / 1000
         self.pages[page]["immediate"] = record
+        self.outstanding += 1
         for ms in (10, 100):
             heapq.heappush(self.pending, (when + ms * 1_000_000, page, ms))
         return record["mincore_resident"]
@@ -48,6 +51,11 @@ class ResidencyFollowup:
             record = self.sample(page)
             record["delay_us"] = (time.monotonic_ns() - self.selector.advised[page]) / 1000
             self.pages[page][str(ms)] = record
+            if ms == 10:
+                self.outstanding -= 1
+                before = self.pages[page]["before"]
+                if before["mincore_resident"] and before["pte"] == "present" and not record["mincore_resident"]:
+                    self.confirmed += 1
 
     def close(self):
         os.close(self.fd)

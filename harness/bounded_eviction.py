@@ -22,6 +22,7 @@ class BoundedEviction:
         self.predictor = None
         self.swap_trace = None
         self.idle_risk = None
+        self.target_pages = 0
         self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
@@ -50,6 +51,11 @@ class BoundedEviction:
             return
         bits = self.residency(start * page, end - start)
         budget = min(16, 64 - len(self.advised))
+        if self.target_pages:
+            # Reserve one target slot per outstanding observation to avoid overshoot.
+            budget = min(budget, self.target_pages - self.followup.confirmed - self.followup.outstanding)
+            if budget <= 0:
+                return
         cutoff = time.monotonic_ns() - self.guard_ns
         def eligible_pages():
             for i, resident in enumerate(bits, start):
@@ -78,7 +84,7 @@ class BoundedEviction:
                                pte=pagemap_state(pagemap.fileno(), self.address, i))
                     return self.predictor.score(epoch, row), i
                 victims = nsmallest(budget, eligible, key=risk)
-        elif self.skip_swapped:
+        elif self.skip_swapped and self.idle_risk is None:
             # Walk beyond the top K to refill slots rejected by the last-moment PTE check.
             victims = sorted(eligible, key=self.last_read.__getitem__)
         elif self.idle_risk is not None:
@@ -87,7 +93,7 @@ class BoundedEviction:
                 stamp = self.last_read[i]
                 age = ((now - stamp) // RECENT_NS).bit_length() if stamp else -1
                 return self.idle_risk.get(str(age), self.idle_risk["fallback"]), i
-            victims = nsmallest(budget, eligible, key=idle_score)
+            victims = sorted(eligible, key=idle_score) if self.skip_swapped else nsmallest(budget, eligible, key=idle_score)
         elif self.lru:
             # Zero timestamps are unseen pages. nsmallest preserves address order on ties.
             victims = nsmallest(budget, eligible, key=self.last_read.__getitem__)

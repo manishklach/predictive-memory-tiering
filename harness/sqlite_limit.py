@@ -38,7 +38,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     trace_enabled = mode.endswith('-faulttrace')
     mode = mode.removesuffix('-faulttrace')
     idle_only = mode == 'bounded-idle'
-    if idle_only:
+    cost_policy = mode == 'bounded-cost'
+    if idle_only or cost_policy:
         mode = 'bounded-lru'
     profiled = binary is not None
     size = db.stat().st_size
@@ -63,7 +64,14 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     if mode == "bounded-predictor":
         from page_reuse_predictor import load_fold
         bounded.predictor = load_fold(Path(os.environ["PMT_MODEL_DIR"]), seed)
-    if idle_only:
+    if bounded and os.environ.get("PMT_TARGET_PAGES"):
+        bounded.target_pages = int(os.environ["PMT_TARGET_PAGES"])
+    if bounded and bounded.target_pages and (idle_only or cost_policy):
+        name = "cost" if cost_policy else "idle"
+        table = Path(os.environ["PMT_MODEL_DIR"]) / f"{name}-frozen.json"
+        bounded.idle_risk = json.loads(table.read_text())
+        bounded.skip_swapped = cost_policy
+    elif idle_only:
         table = Path(os.environ["PMT_MODEL_DIR"]) / f"idle-{seed}.json"
         bounded.idle_risk = json.loads(table.read_text())
     capture = None
@@ -281,9 +289,9 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345,
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False, swapfault_trial=False, filtered_fault_trial=False):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False, swapfault_trial=False, filtered_fault_trial=False, cost_trial=False):
     swapfault_trial = swapfault_trial or filtered_fault_trial
-    bounded_trial = bounded_trial or selection_trial or scoring_trial or guard_trial or lru_trial or noswap_trial or predictor_trial or swapfault_trial
+    bounded_trial = bounded_trial or cost_trial or selection_trial or scoring_trial or guard_trial or lru_trial or noswap_trial or predictor_trial or swapfault_trial
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -387,8 +395,17 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
                 n = len(modes)
                 orders.extend(tuple(modes[(i + j) % n] for j in offsets)
                               for i in range(min(n, 12 - len(orders))))
+        if cost_trial:
+            from reclaim_cost import fit_tables
+            fit_tables(ROOT / "results/sydney-nvme-pilot", Path(directory))
+            os.environ.update(PMT_MODEL_DIR=directory, PMT_TARGET_PAGES="24", PMT_RESIDENCY_FOLLOWUP="1")
+            modes = ("bounded-noswap-faulttrace", "bounded-idle-faulttrace", "bounded-cost-faulttrace")
+            orders = list(permutations(modes)) * 2
+            random.Random(1207).shuffle(orders)
         for pair, order in enumerate(orders):
             seed = 12345 + pair if extended or damos or live or live_score or live_profile or bounded_trial else 12345
+            if cost_trial:
+                seed = 22345 + pair
             expected_checksum = control["checksum"] if seed == 12345 else None
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
@@ -433,6 +450,7 @@ if __name__ == "__main__":
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--scoring-trial", action="store_true", help="matched stock and fixed-range scoring-only runs with opaque SQLite payloads")
+        group.add_argument("--cost-trial", action="store_true", help="compare frozen policies at 24 confirmed reclaim transitions")
         group.add_argument("--filtered-fault-trial", action="store_true", help="add traced swap-entry-filtered LRU to fault comparison")
         group.add_argument("--swapfault-trial", action="store_true", help="compare LRU and idle risk with and without swap fault probes")
         group.add_argument("--predictor-trial", action="store_true", help="compare held-out predictor with LRU and address order")
@@ -453,4 +471,4 @@ if __name__ == "__main__":
         args = parser.parse_args()
         if args.requests < 1:
             parser.error('--requests must be positive')
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial, args.swapfault_trial, args.filtered_fault_trial)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial, args.swapfault_trial, args.filtered_fault_trial, args.cost_trial)
