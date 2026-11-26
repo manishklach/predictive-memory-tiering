@@ -33,10 +33,10 @@ class BoundedEviction:
         budget = min(16, 64 - len(self.advised))
         for i, resident in enumerate(bits, start):
             if resident & 1 and i not in self.advised:
-                self.backing.madvise(mmap.MADV_PAGEOUT, i * page, page)
+                self.backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * page, page)
                 self.advised[i] = time.monotonic_ns()
                 self.stats["requests"] += 1
-                self.stats["immediately_nonresident"] += int(not self.residency(i * page, 1)[0] & 1)
+                self.stats["immediately_nonresident"] += int((self.residency(i * page, 1)[0] & 1) == 0)
                 budget -= 1
                 if not budget:
                     break
@@ -47,4 +47,4 @@ class BoundedEviction:
                 self.revisited.add(i)
                 if time.monotonic_ns() - self.advised[i] <= 100_000_000:
                     self.stats["reused_within_100ms"] += 1
-                    self.stats["nonresident_on_early_reuse"] += int(not self.residency(i * mmap.PAGESIZE, 1)[0] & 1)
+                    self.stats["nonresident_on_early_reuse"] += int((self.residency(i * mmap.PAGESIZE, 1)[0] & 1) == 0)
