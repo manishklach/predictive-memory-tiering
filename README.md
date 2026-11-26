@@ -548,3 +548,18 @@ The filter skipped 837 candidate encounters. All 768 advised pages had present P
 ### NVMe pilot and page-selection research
 
 The Sydney `i7i.2xlarge` remains the NVMe pilot. The `i7i.4xlarge` remains the formal T1 target on the roadmap. In an offline screen on the small scheduled-scan SQLite trace, even a future-aware selector matched address order on early reuse at both horizons. Measuring headroom on the pilot requires recording its actual candidate sets. [Method and limitations](docs/EXPERIMENT.md#page-level-selector-headroom) · [Replay counts](results/sqlite-page-headroom.json)
+
+### Sydney NVMe pilot measured page-selection headroom
+
+On the Sydney `i7i.2xlarge`, 12 SQLite seeds (12345–12356) ran 60,000 queries each under the same 19,660,800-byte half-memory cap, with local NVMe swap, zswap disabled and the 100 ms recent-read guard. The guarded address-order arm recorded 14,722 candidate encounters across 51 decisions. Each record includes the page offset in pages, last-read timestamp, pre-advice residency from mincore and pagemap, and the first subsequent VFS read by monotonic timestamp and 1-based query ID. A null next read means the page had no further observed read before that run ended. Candidates passed the resident mincore filter; their PTE state can still be swapped.
+
+| Reuse horizon | Address order | LRU | Future-aware oracle |
+|---|---:|---:|---:|
+| Within 100 ms | 153/768 (19.92%) | 165/768 (21.48%) | 5/768 (0.65%) |
+| Within the next 64 queries | 4/768 (0.52%) | 2/768 (0.26%) | 0/768 (0%) |
+
+Every selector chose the same number of pages from the same candidate set at each decision. The oracle minimized reuse separately for each horizon. The 64-query window starts with the query about to execute. The 100 ms window starts immediately before the advice loop, after capturing candidate PTEs. Only complete windows count. LRU breaks last-read ties in address order.
+
+The oracle improved on address order at 100 ms on all 12 seeds. That leaves a measurable target for a predictor using only information available before eviction. These are counterfactual selections on the instrumented address-order trajectory. Changing the live policy could change later residency, timing and candidate sets. Capture adds read logging and pagemap probes, so these timings do not establish a throughput gate or a formal T1 result.
+
+[Candidate records](results/sydney-nvme-pilot/candidate-headroom/candidates.jsonl.gz) · [Per-seed counts](results/sydney-nvme-pilot/candidate-headroom/counts.json) · [SQLite run metrics](results/sydney-nvme-pilot/candidate-headroom/sqlite.json) · [Replay code](harness/candidate_replay.py)

@@ -1,0 +1,194 @@
+{
+  "12345": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 6,
+      "lru": 12,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12346": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 15,
+      "lru": 13,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12347": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 9,
+      "lru": 14,
+      "oracle": 2
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12348": {
+    "100ms": {
+      "epochs": 5,
+      "selections": 64,
+      "address": 15,
+      "lru": 14,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 5,
+      "selections": 64,
+      "address": 2,
+      "lru": 1,
+      "oracle": 0
+    }
+  },
+  "12349": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 13,
+      "lru": 10,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12350": {
+    "100ms": {
+      "epochs": 6,
+      "selections": 64,
+      "address": 14,
+      "lru": 14,
+      "oracle": 3
+    },
+    "64_queries": {
+      "epochs": 6,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12351": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 16,
+      "lru": 9,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12352": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 13,
+      "lru": 18,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 1,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12353": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 11,
+      "lru": 16,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 1,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12354": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 13,
+      "lru": 17,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 1,
+      "oracle": 0
+    }
+  },
+  "12355": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 18,
+      "lru": 18,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  },
+  "12356": {
+    "100ms": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 10,
+      "lru": 10,
+      "oracle": 0
+    },
+    "64_queries": {
+      "epochs": 4,
+      "selections": 64,
+      "address": 0,
+      "lru": 0,
+      "oracle": 0
+    }
+  }
+}
