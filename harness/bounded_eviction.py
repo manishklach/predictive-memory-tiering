@@ -1,6 +1,8 @@
 """Bound cooperative eviction to resident pages within SQLite's private mapping."""
 from array import array
 import ctypes
+from heapq import nsmallest
+from itertools import islice
 import mmap
 import time
 
@@ -9,7 +11,10 @@ RECENT_NS = 100_000_000
 
 
 class BoundedEviction:
-    def __init__(self, backing, address, libc, protect_recent=True, guard_ns=RECENT_NS):
+    def __init__(self, backing, address, libc, protect_recent=True, guard_ns=RECENT_NS, lru=False):
+        if lru and not protect_recent:
+            raise ValueError('LRU selection requires read history')
+        self.lru = lru
         self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
@@ -39,18 +44,25 @@ class BoundedEviction:
         bits = self.residency(start * page, end - start)
         budget = min(16, 64 - len(self.advised))
         cutoff = time.monotonic_ns() - self.guard_ns
-        for i, resident in enumerate(bits, start):
-            if resident & 1 and i not in self.advised:
-                if self.last_read is not None and self.last_read[i] >= cutoff:
-                    self.stats["recent_skips"] += 1
-                    continue
-                self.backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * page, page)
-                self.advised[i] = time.monotonic_ns()
-                self.stats["requests"] += 1
-                self.stats["immediately_nonresident"] += int((self.residency(i * page, 1)[0] & 1) == 0)
-                budget -= 1
-                if not budget:
-                    break
+        def eligible_pages():
+            for i, resident in enumerate(bits, start):
+                if resident & 1 and i not in self.advised:
+                    if self.last_read is not None and self.last_read[i] >= cutoff:
+                        self.stats["recent_skips"] += 1
+                        continue
+                    yield i
+
+        eligible = eligible_pages()
+        if self.lru:
+            # Zero timestamps are unseen pages. nsmallest preserves address order on ties.
+            victims = nsmallest(budget, eligible, key=self.last_read.__getitem__)
+        else:
+            victims = islice(eligible, budget)
+        for i in victims:
+            self.backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * page, page)
+            self.advised[i] = time.monotonic_ns()
+            self.stats["requests"] += 1
+            self.stats["immediately_nonresident"] += int((self.residency(i * page, 1)[0] & 1) == 0)
 
     def on_read(self, offset, amount):
         now = time.monotonic_ns() if self.last_read is not None else None

@@ -44,3 +44,18 @@ class RecentReadSelection(unittest.TestCase):
             selector.finish(clock.return_value)
         self.assertEqual(selector.stats["full_window_pages"], 1)
         self.assertEqual(selector.stats["reused_within_100ms"], 0)
+
+    def test_lru_ranks_eligible_pages_within_the_region(self):
+        page = mmap.PAGESIZE
+        backing = MagicMock()
+        backing.__len__.return_value = 24 * page
+        selector = BoundedEviction(backing, page, None, lru=True)
+        selector.residency = lambda offset, pages: [int(i != 18) for i in range(offset // page, offset // page + pages)]
+        with patch("harness.bounded_eviction.time.monotonic_ns", return_value=10**9) as clock:
+            for i in reversed(range(1, 18)):
+                selector.on_read(i * page, page)
+                clock.return_value += 1
+            clock.return_value += RECENT_NS + 1
+            selector.on_read(20 * page, page)
+            selector.apply((2 * page, 23 * page))
+        self.assertEqual(list(selector.advised), [19, 21] + list(range(17, 3, -1)))
