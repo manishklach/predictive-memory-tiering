@@ -1,5 +1,6 @@
 """Exercise PID-scoped DAMOS page-out on a disposable child's anonymous mapping."""
 import argparse
+from contextlib import contextmanager
 import ctypes
 import json
 import mmap
@@ -27,7 +28,8 @@ def child():
             print("verified", flush=True)
 
 
-def probe():
+@contextmanager
+def pageout(pid, base, size):
     if (ADMIN / "nr_kdamonds").read_text().strip() != "0":
         raise RuntimeError("existing DAMON configuration in use")
     if len(Path("/proc/swaps").read_text().splitlines()) < 2:
@@ -35,39 +37,52 @@ def probe():
     daemon = ADMIN / "0"
     ctx = daemon / "contexts/0"
     scheme = ctx / "schemes/0"
+    (ADMIN / "nr_kdamonds").write_text("1")
+    try:
+        for path, value in (
+            (daemon / "contexts/nr_contexts", 1), (ctx / "operations", "vaddr"),
+            (ctx / "targets/nr_targets", 1), (ctx / "targets/0/pid_target", pid),
+            (ctx / "targets/0/regions/nr_regions", 1),
+            (ctx / "targets/0/regions/0/start", base), (ctx / "targets/0/regions/0/end", base + size),
+            (ctx / "monitoring_attrs/intervals/sample_us", 5000),
+            (ctx / "monitoring_attrs/intervals/aggr_us", 100000),
+            (ctx / "monitoring_attrs/intervals/update_us", 0),
+            (ctx / "schemes/nr_schemes", 1), (scheme / "action", "pageout"),
+            (scheme / "access_pattern/sz/min", PAGE), (scheme / "access_pattern/sz/max", size),
+            (scheme / "access_pattern/nr_accesses/max", 0),
+            (scheme / "access_pattern/age/max", 2**32 - 1), (scheme / "access_pattern/age/min", 2),
+            (daemon / "state", "on"),
+        ):
+            path.write_text(str(value))
+        yield daemon, scheme
+    finally:
+        if (daemon / "state").exists() and (daemon / "state").read_text().strip() == "on":
+            (daemon / "state").write_text("off")
+        (ADMIN / "nr_kdamonds").write_text("0")
+
+
+def scheme_stats(daemon, scheme):
+    (daemon / "state").write_text("update_schemes_stats")
+    return {k: int((scheme / "stats" / k).read_text())
+            for k in ("nr_tried", "sz_tried", "nr_applied", "sz_applied")}
+
+
+def probe():
     with subprocess.Popen([sys.executable, __file__, "--child"], stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE, text=True) as target:
         try:
             base = int(target.stdout.readline())
-            (ADMIN / "nr_kdamonds").write_text("1")
-            for path, value in (
-                (daemon / "contexts/nr_contexts", 1), (ctx / "operations", "vaddr"),
-                (ctx / "targets/nr_targets", 1), (ctx / "targets/0/pid_target", target.pid),
-                (ctx / "targets/0/regions/nr_regions", 1),
-                (ctx / "targets/0/regions/0/start", base), (ctx / "targets/0/regions/0/end", base + SIZE),
-                (ctx / "monitoring_attrs/intervals/sample_us", 5000),
-                (ctx / "monitoring_attrs/intervals/aggr_us", 100000),
-                (ctx / "monitoring_attrs/intervals/update_us", 0),
-                (ctx / "schemes/nr_schemes", 1), (scheme / "action", "pageout"),
-                (scheme / "access_pattern/sz/min", PAGE), (scheme / "access_pattern/sz/max", SIZE),
-                (scheme / "access_pattern/nr_accesses/max", 0),
-                (scheme / "access_pattern/age/max", 2**32 - 1), (scheme / "access_pattern/age/min", 2),
-                (daemon / "state", "on"),
-            ):
-                path.write_text(str(value))
-            deadline = time.monotonic() + 15
-            while time.monotonic() < deadline:
-                time.sleep(0.25)
-                (daemon / "state").write_text("update_schemes_stats")
-                stats = {k: int((scheme / "stats" / k).read_text())
-                         for k in ("nr_tried", "sz_tried", "nr_applied", "sz_applied")}
-                status = Path(f"/proc/{target.pid}/status").read_text().splitlines()
-                swap_kib = int(next(s for s in status if s.startswith("VmSwap:")).split()[1])
-                if stats["sz_applied"] > 0 and swap_kib > 0:
-                    break
-            else:
-                raise RuntimeError(f"no confirmed page-out: {stats}, VmSwap={swap_kib} KiB")
-            (daemon / "state").write_text("off")
+            with pageout(target.pid, base, SIZE) as (daemon, scheme):
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    time.sleep(0.25)
+                    stats = scheme_stats(daemon, scheme)
+                    status = Path(f"/proc/{target.pid}/status").read_text().splitlines()
+                    swap_kib = int(next(s for s in status if s.startswith("VmSwap:")).split()[1])
+                    if stats["sz_applied"] > 0 and swap_kib > 0:
+                        break
+                else:
+                    raise RuntimeError(f"no confirmed page-out: {stats}, VmSwap={swap_kib} KiB")
             target.stdin.write("verify\n")
             target.stdin.flush()
             assert target.stdout.readline().strip() == "verified" and target.wait() == 0
@@ -75,9 +90,6 @@ def probe():
                         mapping_bytes=SIZE, sample_us=5000, aggregate_us=100000,
                         stats=stats, target_swap_kib=swap_kib, contents_verified=True)
         finally:
-            if (daemon / "state").exists() and (daemon / "state").read_text().strip() == "on":
-                (daemon / "state").write_text("off")
-            (ADMIN / "nr_kdamonds").write_text("0")
             if target.poll() is None:
                 target.terminate()
 

@@ -1,6 +1,9 @@
 """Compare stock reclaim and pmtd detector-only on SQLite point queries under memory.max."""
 import argparse
+from contextlib import nullcontext
+from itertools import permutations
 import ctypes
+from check_damos import pageout, scheme_stats
 import hashlib
 import json
 import mmap
@@ -39,7 +42,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
     score_calls = history_only_calls = 0
     ctl = None
     inline = mode in ("scoring-only", "detector-inline")
-    observe = mode != "stock"
+    observe = mode not in ("stock", "damos")
     if inline:
         lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
         ptr = ctypes.c_void_p
@@ -130,15 +133,19 @@ def worker(db, mode, binary, interval, score_interval, seed):
     checksum = 0
     for stage in profile:
         profile[stage] = 0
-    start = time.perf_counter_ns()
-    for key in keys:
-        t = time.perf_counter_ns()
-        row = conn.execute("select id,length(payload) from items where id=?", (key,)).fetchone()
-        times.append(time.perf_counter_ns() - t)
-        if row != (key, 1500):
-            raise ValueError("incorrect query result")
-        checksum += row[0]
-    elapsed = time.perf_counter_ns() - start
+    stats = None
+    with (pageout(os.getpid(), address, size) if mode == "damos" else nullcontext()) as monitor:
+        start = time.perf_counter_ns()
+        for key in keys:
+            t = time.perf_counter_ns()
+            row = conn.execute("select id,length(payload) from items where id=?", (key,)).fetchone()
+            times.append(time.perf_counter_ns() - t)
+            if row != (key, 1500):
+                raise ValueError("incorrect query result")
+            checksum += row[0]
+        elapsed = time.perf_counter_ns() - start
+        if monitor:
+            stats = scheme_stats(*monitor)
     conn.close()
     vfs.unregister()
     if inline:
@@ -149,7 +156,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
             raise RuntimeError("controller failed")
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
-                          inline_score_calls=score_calls, history_only_calls=history_only_calls,
+                          damos_stats=stats, inline_score_calls=score_calls, history_only_calls=history_only_calls,
                           profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
 
 
@@ -169,7 +176,7 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -208,18 +215,23 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended):
             for block in range(3):
                 rng.shuffle(modes)
                 orders.extend(tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4))
+        if damos:
+            settings = {"stock": ("stock", 256, 1), "damos": ("damos", 256, 1),
+                        "pmt-256": ("detector-inline", 256, 256)}
+            orders = list(permutations(settings)) * 2
+            random.Random(1207).shuffle(orders)
         for pair, order in enumerate(orders):
-            seed = 12345 + pair if extended else 12345
+            seed = 12345 + pair if extended or damos else 12345
             expected_checksum = control["checksum"] if seed == 12345 else None
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
                 worker_mode, interval, cadence = settings.get(mode, (mode, 16, 1))
                 record = run(db, worker_mode, limit, binary, interval, cadence, seed)
                 record["mode"] = mode
-                if scoring_sweep or extended:
-                    record["score_interval"] = None if mode == "stock" else cadence
+                if scoring_sweep or extended or damos:
+                    record["score_interval"] = None if mode in ("stock", "damos") else cadence
                 if settings:
-                    record["refresh_interval"] = None if mode == "stock" else interval
+                    record["refresh_interval"] = None if mode in ("stock", "damos") else interval
                 if expected_checksum is None:
                     expected_checksum = record["checksum"]
                 assert record["checksum"] == expected_checksum
@@ -246,10 +258,11 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--damos", action="store_true", help="compare stock, DAMOS and PMT 256/256 across 12 seeds")
         group.add_argument("--extended-scoring", action="store_true", help="compare 64, 128 and 256 over 12 matched seeds")
         group.add_argument("--scoring-sweep", action="store_true", help="rank every 1, 4, 16 or 64 observations at residency interval 256")
         group.add_argument("--sampling-sweep", action="store_true", help="compare refresh intervals of 16, 64 and 256 observations")
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos)
