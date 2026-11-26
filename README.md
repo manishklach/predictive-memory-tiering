@@ -654,6 +654,22 @@ Reproduce with `python harness/feature_ablation.py`. [Per-seed ablation counts](
 
 The diagnostic module registers up to 64 advised virtual pages for the SQLite query thread and measures elapsed time in `do_swap_page`. A scheduler tracepoint measures time from a sleeping switch-out inside that fault until the thread runs again. This includes wake-to-run delay. The probe also reports the task delay-accounting swap-in delta. It registers while the device is open and the harness checks for missed probe instances.
 
-The first Sydney control recorded one 3.681 Âµs handler call with zero sleeping time after page-out. This demonstrated that a swapped PTE alone cannot validate a storage stall. The stronger fixture requires physically nonresident pages, a positive sleeping interval, a resident control and an unregistered control. The comparison harness uses balanced trace-on and trace-off arms for LRU and idle-only, with common residency probes, 12 held-out seeds, 60,000 queries per seed and the original half-memory cap. Bytes transitioning from a present, resident page to nonresident at each checkpoint are a workload-local reclaim estimate. The stronger control and comparison await validated results.
+The first Sydney control recorded one 3.681 Âµs handler call with zero sleeping time after page-out. This demonstrated that a swapped PTE alone cannot validate a storage stall. The stronger fixture requires physically nonresident pages, a positive sleeping interval, a resident control and an unregistered control. The comparison harness uses balanced trace-on and trace-off arms for LRU and idle-only, with common residency probes, 12 held-out seeds, 60,000 queries per seed and the original half-memory cap. Bytes transitioning from a present, resident page to nonresident at each checkpoint are a workload-local reclaim estimate. The validated results follow.
 
 [Kernel probe](kernel/swapfault/pmt_swapfault.c) Â· [Validation fixture](harness/swap_trace.py) Â· [Per-seed aggregation](harness/summarize_swapfault.py)
+
+
+On the Sydney `i7i.2xlarge` with instance-store NVMe swap and zswap disabled, two consecutive probe registrations passed the positive and negative controls. Each captured faults on all 16 registered nonresident pages and none on the registered resident control. An initial campaign returned silent zeros after registration and was discarded. The reported campaign reinitialized the kernel probe for every worker, checked for missed probe instances, and verified query-thread swap-handler activity in every traced run.
+
+| Selector and instrumentation | Advised pages | Nonresident bytes at 10 ms | At 100 ms | Attributed sleeping time | Median seed p99 | Median seed throughput |
+|---|---:|---:|---:|---:|---:|---:|
+| LRU, trace on | 768 | 1,470,464 | 1,150,976 | 84.777 ms | 108.81 µs | 33,458 q/s |
+| Idle-only, trace on | 752 | 2,703,360 | 2,174,976 | 81.668 ms | 108.80 µs | 33,473 q/s |
+| LRU, trace off | 720 | 1,499,136 | 1,175,552 | unmeasured | 108.12 µs | 32,630 q/s |
+| Idle-only, trace off | 768 | 2,764,800 | 2,191,360 | unmeasured | 108.10 µs | 32,981 q/s |
+
+Bytes and sleeping time are summed across 12 matched seeds per arm. The checkpoints count only pages present and resident before advice that were nonresident at follow-up. With tracing enabled, idle-only yielded 84% more observed nonresident bytes at 10 ms (higher on 11 seeds, tied on one) and 3.7% less total tagged-page sleep (lower on eight seeds). Application p99 and throughput were nearly identical. Trace-on p99 was about 0.7 µs higher for both policies; throughput was also higher in both traced arms, so the paired controls do not establish a fixed tracing slowdown.
+
+The page mix matters. Before advice 370 of 768 LRU pages already had swapped PTEs, versus 41 of 752 idle-only pages. Restricting sleep attribution to pages with present PTEs before advice gives 44.203 ms for LRU and 77.601 ms for idle-only. Total tagged-page sleep includes later faults on pages already swapped and can include repeated faults on the same page. It measures query-thread time off CPU following a sleeping switch-out inside the fault handler, including wake-to-run latency. These totals establish neither the incremental stall caused by advice nor a latency win at matched reclaimed bytes.
+
+[Per-seed metrics](results/sydney-nvme-pilot/swap-fault-attribution/summary.json) · [All 48 runs with per-page records](results/sydney-nvme-pilot/swap-fault-attribution/trial.json.gz) · [Repeated positive control](results/sydney-nvme-pilot/swap-fault-attribution/validation-repeat.json)
