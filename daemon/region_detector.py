@@ -3,6 +3,7 @@ import ctypes
 import os
 from pathlib import Path
 import re
+import select
 import threading
 import time
 
@@ -23,7 +24,6 @@ class RegionDetector:
         self.partial = []
         self.profile = dict(read_cpu_ns=0, wait_cpu_ns=0, decode_score_cpu_ns=0, reads=0, empty_reads=0)
         self.error = None
-        self.stop = threading.Event()
 
     def consume(self, line):
         match = LINE.search(line)
@@ -59,13 +59,32 @@ class RegionDetector:
 
     def start(self, trace):
         self.fd = os.open(trace / "trace_pipe", os.O_RDONLY | os.O_NONBLOCK)
-        self.thread = threading.Thread(target=self.read)
-        self.thread.start()
+        try:
+            self.wake_fd = os.eventfd(0, os.EFD_CLOEXEC)
+            try:
+                self.thread = threading.Thread(target=self.read)
+                self.thread.start()
+            except BaseException:
+                os.close(self.wake_fd)
+                raise
+        except BaseException:
+            os.close(self.fd)
+            raise
 
     def read(self):
         pending = b""
         try:
-            while not self.stop.is_set():
+            poller = select.poll()
+            poller.register(self.fd, select.POLLIN)
+            poller.register(self.wake_fd, select.POLLIN)
+            while True:
+                tick = time.thread_time_ns()
+                events = dict(poller.poll())
+                self.profile["wait_cpu_ns"] += time.thread_time_ns() - tick
+                if self.wake_fd in events:
+                    break
+                if events[self.fd] & (select.POLLERR | select.POLLNVAL):
+                    raise OSError("trace pipe poll failed")
                 tick = time.thread_time_ns()
                 try:
                     chunk = os.read(self.fd, 65536)
@@ -73,8 +92,6 @@ class RegionDetector:
                     done = time.thread_time_ns()
                     self.profile["empty_reads"] += 1
                     self.profile["read_cpu_ns"] += done - tick
-                    self.stop.wait(.005)
-                    self.profile["wait_cpu_ns"] += time.thread_time_ns() - done
                     continue
                 done = time.thread_time_ns()
                 self.profile["reads"] += 1
@@ -89,8 +106,9 @@ class RegionDetector:
             self.error = exc
 
     def close(self):
-        self.stop.set()
+        os.eventfd_write(self.wake_fd, 1)
         self.thread.join()
+        os.close(self.wake_fd)
         os.close(self.fd)
         if self.error:
             raise self.error
