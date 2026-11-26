@@ -151,3 +151,23 @@ Each mode ran the same 3,000 queries four times on WSL2 and occupied each run po
 Enabling page-out reduced median throughput by a further 7.8% and increased median p99 by 11.7% relative to scoring only. The full detector was slower in three of the four rounds on both metrics. These differences include the effect of subsequent memory accesses and reclaim. [Individual runs, counters, and calibration](results/sqlite-stages-50.json)
 
 To reproduce, run `make pmtd libpmt-profile.so` and then `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-stages.json --stages`.
+
+### Residency sampling intervals on SQLite
+
+Refreshing the residency map every 256 logical page observations brought observation-only p99 within 0.003 ms of stock Linux in this local run. With scoring and page-out enabled, the same change improved throughput by 9.5% over the previous interval of 16, while median p99 rose by 3.3%.
+
+| Mode | Observations per refresh | Scans per run | Median query p99 (ms) | Median queries/s |
+| --- | ---: | ---: | ---: | ---: |
+| Stock Linux | — | 0 | 0.707 | 10,659 |
+| Observation only | 16 | 454 | 0.875 | 6,369 |
+| Observation only | 64 | 114 | 0.884 | 7,445 |
+| Observation only | 256 | 29 | 0.709 | 9,620 |
+| Detector with page-out | 16 | 454 | 1.212 | 3,842 |
+| Detector with page-out | 64 | 114 | 1.152 | 4,138 |
+| Detector with page-out | 256 | 29 | 1.251 | 4,207 |
+
+The interval controls full-map scans. Every logical read still updates its touched page, and the full detector still scores every observation. Increasing the interval leaves more time for Linux reclaim to change residency between scans. Median cumulative residency-check time in the full detector fell from 188 ms at 16 observations to 53 ms at 64 and 19 ms at 256. The lowest observed full-detector p99 was at 64, but individual run ranges overlap.
+
+Each configuration ran once per round for four rounds in seeded randomized order, using the same 3,000 queries and a fresh cgroup capped at 19,406,848 bytes (50% of the calibrated stock peak rounded down to a page). All 28 runs passed query checks, used swap and recorded zero OOM kills. [Raw runs, counters, and timings](results/sqlite-sampling-50.json)
+
+Reproduce with `make pmtd libpmt-profile.so` followed by `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-sampling.json --sampling-sweep`.

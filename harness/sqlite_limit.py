@@ -24,7 +24,7 @@ REQUESTS = 3000
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def worker(db, mode, binary):
+def worker(db, mode, binary, interval):
     profiled = binary is not None
     size = db.stat().st_size
     pages = size // PAGE
@@ -34,7 +34,7 @@ def worker(db, mode, binary):
     address = ctypes.addressof(ctypes.c_char.from_buffer(backing))
     libc = ctypes.CDLL(None, use_errno=True)
     bitmap = ctypes.create_string_buffer(pages)
-    reads = evictions = eviction_advice = 0
+    reads = evictions = eviction_advice = refreshes = 0
     profile = dict(residency=0, controller_round_trip=0, pageout=0, scoring=0, pipe_path=0, inline_path=0)
     ctl = None
     inline = mode in ("scoring-only", "detector-inline")
@@ -61,15 +61,17 @@ def worker(db, mode, binary):
 
     class File(apsw.VFSFile):
         def xRead(self, amount, offset):
-            nonlocal reads, evictions, eviction_advice
+            nonlocal reads, evictions, eviction_advice, refreshes
             data = backing[offset:offset + amount]
             for page in range(offset // PAGE, (offset + amount + PAGE - 1) // PAGE):
                 reads += 1
                 if observe:
                     t = time.perf_counter_ns()
-                    refresh = mode == "detector-full" or (reads - 1) % 16 == 0
-                    if refresh and libc.mincore(ctypes.c_void_p(address), ctypes.c_size_t(size), bitmap):
-                        raise OSError(ctypes.get_errno(), "mincore")
+                    refresh = mode == "detector-full" or (reads - 1) % interval == 0
+                    if refresh:
+                        if libc.mincore(ctypes.c_void_p(address), ctypes.c_size_t(size), bitmap):
+                            raise OSError(ctypes.get_errno(), "mincore")
+                        refreshes += 1
                     bitmap[page] = 1  # The just-read page was resident at access.
                     now = time.perf_counter_ns()
                     profile['residency'] += now - t
@@ -138,17 +140,17 @@ def worker(db, mode, binary):
             raise RuntimeError("controller failed")
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
-                          profile_ns=profile, reads=reads, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
+                          profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
 
 
-def run(db, mode, limit, binary=None):
+def run(db, mode, limit, binary=None, interval=16):
     group = Path(tempfile.mkdtemp(prefix="pmt-sql-", dir="/sys/fs/cgroup"))
     try:
         if limit:
             (group / "memory.max").write_text(str(limit))
         def enter():
             (group / "cgroup.procs").write_text(str(os.getpid()))
-        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, *([binary] if binary else [])],
+        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, str(interval), *([binary] if binary else [])],
                                       preexec_fn=enter)
         return dict(mode=mode, **json.loads(raw), peak_bytes=int((group / "memory.peak").read_text()),
                     swap_peak_bytes=int((group / "memory.swap.peak").read_text()),
@@ -157,7 +159,7 @@ def run(db, mode, limit, binary=None):
         group.rmdir()
 
 
-def main(output, baseline, stages):
+def main(output, baseline, stages, sweep):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -177,10 +179,22 @@ def main(output, baseline, stages):
         if stages:
             modes = ("stock", "observation-only", "scoring-only", "detector-inline")
             orders = [tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4)]
+        settings = {}
+        if sweep:
+            settings["stock"] = ("stock", 16)
+            for mode in ("observation-only", "detector-inline"):
+                for interval in (16, 64, 256):
+                    settings[f"{mode}-{interval}"] = (mode, interval)
+            rng = random.Random(1207)
+            orders = [rng.sample(list(settings), len(settings)) for _ in range(4)]
         for pair, order in enumerate(orders):
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
-                record = run(db, mode, limit, binary)
+                worker_mode, interval = settings.get(mode, (mode, 16))
+                record = run(db, worker_mode, limit, binary, interval)
+                record["mode"] = mode
+                if sweep:
+                    record["refresh_interval"] = None if mode == "stock" else interval
                 assert record["checksum"] == control["checksum"]
                 runs.append(dict(pair=pair + 1, **record))
         summary = {mode: {metric: statistics.median(r[metric] for r in runs if r["mode"] == mode)
@@ -189,7 +203,7 @@ def main(output, baseline, stages):
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
                              profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
-                                 for label, path in ([("inline", ROOT / "libpmt-profile.so")] if stages else
+                                 for label, path in ([("inline", ROOT / "libpmt-profile.so")] if stages or sweep else
                                                      [("before", baseline), ("after", ROOT / "libpmt-profile.so")]
                                                      if baseline else [])},
                              calibration=control, memory_max_bytes=limit, runs=runs, median=summary),
@@ -199,12 +213,13 @@ def main(output, baseline, stages):
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--worker"]:
-        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else None)
+        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[5] if len(sys.argv) > 5 else None, int(sys.argv[4]))
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--sampling-sweep", action="store_true", help="compare refresh intervals of 16, 64 and 256 observations")
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep)
