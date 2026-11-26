@@ -60,3 +60,7 @@ The next EC2 milestone is the development-host recovery rehearsal. The Sydney sm
 | `docs/` | Design, experiment plan, build guide, and EC2 runbook |
 
 See the [first prerelease notes](docs/RELEASE-v0.1.0-alpha.1.md) for the verified scope and outstanding EC2 milestones.
+
+## License
+
+This project is licensed under the [GNU General Public License, version 2 only](LICENSE). The [userspace API header](include/pmt_uapi.h) carries the Linux syscall exception as indicated in its SPDX declaration.
