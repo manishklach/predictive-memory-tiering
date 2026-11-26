@@ -51,7 +51,8 @@ def probe():
                 (ctx / "schemes/nr_schemes", 1), (scheme / "action", "pageout"),
                 (scheme / "access_pattern/sz/min", PAGE), (scheme / "access_pattern/sz/max", SIZE),
                 (scheme / "access_pattern/nr_accesses/max", 0),
-                (scheme / "access_pattern/age/min", 2), (daemon / "state", "on"),
+                (scheme / "access_pattern/age/max", 2**32 - 1), (scheme / "access_pattern/age/min", 2),
+                (daemon / "state", "on"),
             ):
                 path.write_text(str(value))
             deadline = time.monotonic() + 15
