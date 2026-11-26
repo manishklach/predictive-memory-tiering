@@ -15,7 +15,7 @@ EVENT = re.compile(r"damon_aggregated: target_id=0 nr_regions=\d+ (\d+)-(\d+): (
 
 
 @contextmanager
-def sampling(pid, ranges=()):
+def sampling(pid, ranges=(), detector=None):
     """Yield a record list, populated on exit. Kernel pins its target PID."""
     pidfd = os.pidfd_open(pid)
     trace = None
@@ -57,7 +57,13 @@ def sampling(pid, ranges=()):
         (event / "filter").write_text(f"common_pid == {kpid}")
         (event / "enable").write_text("1")
         (trace / "tracing_on").write_text("1")
-        yield records
+        if detector:
+            detector.start(trace)
+        try:
+            yield records
+        finally:
+            if detector:
+                detector.close()
         (trace / "tracing_on").write_text("0")
         for path in (trace / "per_cpu").glob("cpu*/stats"):
             if re.search(r"^overrun:\s*[1-9]", path.read_text(), re.M):
@@ -82,18 +88,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pid", type=int)
     parser.add_argument("--seconds", type=float, default=5)
+    parser.add_argument("--score", action="store_true", help="rank live regions without applying advice")
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, lambda *_: raise_exit())
     if args.seconds <= 0:
         parser.error("--seconds must be positive")
+    detector = None
+    if args.score:
+        from region_detector import RegionDetector
+        detector = RegionDetector()
     pidfd = os.pidfd_open(args.pid)
     try:
         poller = select.poll()
         poller.register(pidfd, select.POLLIN)
-        with sampling(args.pid) as records:
+        with sampling(args.pid, detector=detector) as records:
             poller.poll(int(args.seconds * 1000))
     finally:
         os.close(pidfd)
+    if detector:
+        print(json.dumps(dict(pid=args.pid, fields=["decision_monotonic_ns", "candidate_range"],
+                              decisions=detector.decisions)))
+        return
     print(json.dumps(dict(pid=args.pid, fields=["start", "end", "sampled_accesses", "age"],
                           records=records)))
 

@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 sys.path.insert(0, str(ROOT / "daemon"))
 from live_sample import sampling
+from region_detector import RegionDetector
 
 
 def worker(db, mode, binary, interval, score_interval, seed):
@@ -46,7 +47,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
     score_calls = history_only_calls = 0
     ctl = None
     inline = mode in ("scoring-only", "detector-inline")
-    observe = mode not in ("stock", "damos", "live")
+    observe = mode not in ("stock", "damos", "live", "live-score")
     if inline:
         lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
         ptr = ctypes.c_void_p
@@ -138,11 +139,12 @@ def worker(db, mode, binary, interval, score_interval, seed):
     for stage in profile:
         profile[stage] = 0
     stats = None
+    detector = RegionDetector() if mode == "live-score" else None
     context = nullcontext()
     if mode == "damos":
         context = pageout(os.getpid(), address, size)
-    elif mode == "live":
-        context = sampling(os.getpid())
+    elif mode in ("live", "live-score"):
+        context = sampling(os.getpid(), detector=detector)
     with context as monitor:
         start = time.perf_counter_ns()
         for key in keys:
@@ -153,6 +155,8 @@ def worker(db, mode, binary, interval, score_interval, seed):
                 raise ValueError("incorrect query result")
             checksum += row[0]
         elapsed = time.perf_counter_ns() - start
+        if detector:
+            scored = [choice for stamp, choice in detector.decisions if start <= stamp <= start + elapsed]
         if mode == "damos":
             stats = scheme_stats(*monitor)
     conn.close()
@@ -165,6 +169,8 @@ def worker(db, mode, binary, interval, score_interval, seed):
             raise RuntimeError("controller failed")
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
+                          live_scored_epochs=len(scored) if detector else None,
+                          live_candidate_epochs=sum(c is not None for c in scored) if detector else None,
                           live_region_records=len(monitor) if mode == "live" else None, damos_stats=stats, inline_score_calls=score_calls, history_only_calls=history_only_calls,
                           profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
 
@@ -185,7 +191,7 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -229,10 +235,11 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live):
                         "pmt-256": ("detector-inline", 256, 256)}
             orders = list(permutations(settings)) * 2
             random.Random(1207).shuffle(orders)
-        if live:
-            orders = [("stock", "live"), ("live", "stock")] * 6
+        if live or live_score:
+            arm = "live-score" if live_score else "live"
+            orders = [("stock", arm), (arm, "stock")] * 6
         for pair, order in enumerate(orders):
-            seed = 12345 + pair if extended or damos or live else 12345
+            seed = 12345 + pair if extended or damos or live or live_score else 12345
             expected_checksum = control["checksum"] if seed == 12345 else None
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
@@ -240,9 +247,9 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live):
                 record = run(db, worker_mode, limit, binary, interval, cadence, seed)
                 record["mode"] = mode
                 if scoring_sweep or extended or damos:
-                    record["score_interval"] = None if mode in ("stock", "damos", "live") else cadence
+                    record["score_interval"] = None if mode in ("stock", "damos", "live", "live-score") else cadence
                 if settings:
-                    record["refresh_interval"] = None if mode in ("stock", "damos", "live") else interval
+                    record["refresh_interval"] = None if mode in ("stock", "damos", "live", "live-score") else interval
                 if expected_checksum is None:
                     expected_checksum = record["checksum"]
                 assert record["checksum"] == expected_checksum
@@ -269,6 +276,7 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--live-score", action="store_true", help="rank live region samples during SQLite queries")
         group.add_argument("--live", action="store_true", help="time stock and PID-scoped observation over twelve matched seeds")
         group.add_argument("--damos", action="store_true", help="compare stock, DAMOS and PMT 256/256 across 12 seeds")
         group.add_argument("--extended-scoring", action="store_true", help="compare 64, 128 and 256 over 12 matched seeds")
@@ -277,4 +285,4 @@ if __name__ == "__main__":
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score)

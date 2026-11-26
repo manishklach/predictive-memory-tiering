@@ -38,13 +38,47 @@ def child():
             arena[pos]
 
 
-def run():
+def run(score=False):
     with subprocess.Popen([sys.executable, __file__, "--child"], stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE, text=True) as target:
         try:
             base = int(target.stdout.readline())
             ranges = [(base, base + HALF), (base + HALF + GAP, base + 2 * HALF + GAP)]
             phases = []
+            if score:
+                from region_detector import RegionDetector
+                detector = RegionDetector()
+                with sampling(target.pid, ranges, detector):
+                    for hot in (0, 1, 0, 1):
+                        target.stdin.write(f"{hot}\n")
+                        target.stdin.flush()
+                        assert target.stdout.readline().strip() == "ready"
+                        begin = time.monotonic_ns()
+                        time.sleep(1.8)
+                        end = time.monotonic_ns()
+                        phases.append((hot, begin, end))
+                report = []
+                for hot, begin, end in phases:
+                    counts = dict(cold=0, hot=0, other=0, abstain=0)
+                    early = dict.fromkeys(counts, 0)
+                    for stamp, region in detector.decisions:
+                        if not begin <= stamp < end:
+                            continue
+                        outcome = "abstain"
+                        if region:
+                            outcome = "other"
+                            for i, (low, high) in enumerate(ranges):
+                                if low <= region[0] < region[1] <= high:
+                                    outcome = "hot" if i == hot else "cold"
+                        bucket = early if stamp - begin < 400_000_000 else counts
+                        bucket[outcome] += 1
+                    report.append(dict(hot_half=hot, transition=early, settled=counts))
+                for phase in report:
+                    votes = phase["settled"]
+                    if votes["cold"] < 5 or votes["cold"] < .9 * sum(votes.values()):
+                        raise RuntimeError(f"cold-region verification failed: {report}")
+                return dict(kernel=os.uname().release, phase_ms=1800, transition_ms=400,
+                            half_bytes=HALF, pageout_requests=0, phases=report)
             for hot in (0, 1, 0, 1):
                 target.stdin.write(f"{hot}\n")
                 target.stdin.flush()
@@ -94,4 +128,4 @@ if __name__ == "__main__":
     if "--child" in sys.argv:
         child()
     else:
-        print(json.dumps({**run(), "shutdown": exit_checks()}, indent=2))
+        print(json.dumps({**run("--score" in sys.argv), "shutdown": exit_checks()}, indent=2))

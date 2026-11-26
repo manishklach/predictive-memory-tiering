@@ -101,6 +101,54 @@ static void observe(struct page_history *item, const struct pmt_observation *obs
 	item->candidate = false;
 }
 
+static double cold_score(const struct page_history *item, uint64_t now, uint64_t idle_ns)
+{
+	double idle, frequency, score;
+
+	idle = now - item->last;
+	frequency = item->frequency / (1 + idle / idle_ns);
+	score = idle / idle_ns - 0.25 * item->dirty -
+		0.25 * (frequency / (1 + frequency));
+	if (item->touches > 2 && item->deviation <= 0.25 * item->gap &&
+	    idle <= 1.25 * item->gap)
+		score -= 1;
+	return score;
+}
+
+#ifdef PMT_PROFILE
+size_t pmt_region_state_size(void)
+{
+	return sizeof(struct page_history);
+}
+
+/* One positive aggregate is one observed touch; a new cold range starts its
+ * idle clock on discovery. No per-page dirty or residency bits are available. */
+double pmt_region_sample(struct page_history *item, uint64_t now, uint32_t hits,
+			 uint64_t idle_ns, uint64_t dwell_ns)
+{
+	double score;
+
+	if (hits) {
+		struct pmt_observation obs = {.timestamp_ns = now};
+
+		observe(item, &obs, idle_ns);
+		return 0;
+	}
+	if (!item->last)
+		item->last = now;
+	score = cold_score(item, now, idle_ns);
+	if (score <= 1) {
+		item->candidate = false;
+		return 0;
+	}
+	if (!item->candidate) {
+		item->candidate = true;
+		item->candidate_since = now;
+	}
+	return now - item->candidate_since >= dwell_ns ? score : 0;
+}
+#endif
+
 static struct pmt_advice decide(struct policy *policy, const struct pmt_observation *obs,
 				const unsigned char *resident)
 {
@@ -113,7 +161,7 @@ static struct pmt_advice decide(struct policy *policy, const struct pmt_observat
 	observe(&policy->history[obs->page], obs, policy->idle_ns);
 	for (uint32_t page = 0; page < policy->pages; page++) {
 		struct page_history *item = &policy->history[page];
-		double score, idle, frequency;
+		double score;
 
 		if (!resident[page]) {
 			item->candidate = false;
@@ -125,13 +173,7 @@ static struct pmt_advice decide(struct policy *policy, const struct pmt_observat
 			item->candidate = false;
 			continue;
 		}
-		idle = obs->timestamp_ns - item->last;
-		frequency = item->frequency / (1 + idle / policy->idle_ns);
-		score = idle / policy->idle_ns - 0.25 * item->dirty -
-			0.25 * (frequency / (1 + frequency));
-		if (item->touches > 2 && item->deviation <= 0.25 * item->gap &&
-		    idle <= 1.25 * item->gap)
-			score -= 1;
+		score = cold_score(item, obs->timestamp_ns, policy->idle_ns);
 		if (score <= 1) {
 			item->candidate = false;
 			continue;
