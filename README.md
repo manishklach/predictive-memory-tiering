@@ -596,3 +596,18 @@ The Sydney `i7i.2xlarge` ran all three selectors on each of 12 seeds (12345–12
 Compared seed by seed, the predictor had lower reuse than address order on six seeds, tied on two and had higher reuse on four. Against LRU it won six, tied one and lost five. The offline advantage over LRU did not carry through to pooled live reuse. This three-selector pilot does not establish a throughput win over stock Linux.
 
 Run with `--predictor-trial --requests 60000 --paired-calibration results/sydney-damon/formal/bounded-pageout.json` in the SQLite harness. [All 36 runs](results/sydney-nvme-pilot/live-predictor/sqlite.json)
+
+### Why the offline predictor advantage reversed live
+
+On the earlier address-order capture, the frozen predictor beat LRU by 29 early reuses per 768 selections (136 vs 165). On fresh captures from the two live selectors, LRU beat the predictor on **both** sets of decisions. Each row below holds the candidates, page budget and subsequent SQLite reads fixed. Lower counts are better.
+
+| Source of candidate sets and observed reads | LRU replay, reused within 100 ms | Predictor replay, reused within 100 ms | Pages chosen by both |
+|---|---:|---:|---:|
+| Live LRU | 149/768 (19.40%) | 157/768 (20.44%) | 78/768 |
+| Live predictor | 170/768 (22.14%) | 177/768 (23.05%) | 71/768 |
+
+Replay reproduced all 1,536 live selections in order across 96 decisions. The predictor incurred 7–8 more early reuses than LRU within either trajectory. Moving either ranking from the LRU capture to the predictor capture added 20–21 early reuses. The live gap therefore reflects both ranking quality and which decisions and future reads the run produced. The captures do not isolate whether eviction feedback, timing, or run variability caused the trajectory difference.
+
+The Sydney NVMe pilot used the same 12 held-out seeds, 60,000 queries per seed, 19,660,800-byte limit, frozen models, 100 ms guard and 16-page decision budget. Live per-page timestamps gave 150/768 early reuses for LRU and 178/768 for the predictor. Replay starts the clock at the shared pre-advice snapshot, slightly earlier. Median seed p99 and throughput were 111.75 µs and 30,996 queries/s for instrumented LRU, and 111.03 µs and 31,009 queries/s for the instrumented predictor. Candidate and read logging are included in both timings.
+
+[Per-seed comparisons](results/sydney-nvme-pilot/selector-trajectories/comparison.json) · [Joined candidate captures and SQLite runs](results/sydney-nvme-pilot/selector-trajectories) · [Replay implementation](harness/trajectory_replay.py)

@@ -1,0 +1,270 @@
+{
+  "lru": {
+    "totals": {
+      "verified_epochs": 48,
+      "verified_pages": 768,
+      "epochs": 48,
+      "selections": 768,
+      "candidates": 24079,
+      "overlap": 78,
+      "lru": 149,
+      "predictor": 157
+    },
+    "seeds": {
+      "12345": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 2957,
+        "overlap": 3,
+        "lru": 13,
+        "predictor": 14
+      },
+      "12346": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1390,
+        "overlap": 3,
+        "lru": 15,
+        "predictor": 12
+      },
+      "12347": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1202,
+        "overlap": 5,
+        "lru": 23,
+        "predictor": 17
+      },
+      "12348": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 2546,
+        "overlap": 7,
+        "lru": 14,
+        "predictor": 6
+      },
+      "12349": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 3734,
+        "overlap": 4,
+        "lru": 9,
+        "predictor": 13
+      },
+      "12350": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1826,
+        "overlap": 3,
+        "lru": 14,
+        "predictor": 10
+      },
+      "12351": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 3165,
+        "overlap": 5,
+        "lru": 10,
+        "predictor": 15
+      },
+      "12352": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1799,
+        "overlap": 9,
+        "lru": 7,
+        "predictor": 7
+      },
+      "12353": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 247,
+        "overlap": 31,
+        "lru": 12,
+        "predictor": 18
+      },
+      "12354": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1659,
+        "overlap": 1,
+        "lru": 7,
+        "predictor": 15
+      },
+      "12355": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 2969,
+        "overlap": 0,
+        "lru": 16,
+        "predictor": 16
+      },
+      "12356": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 585,
+        "overlap": 7,
+        "lru": 9,
+        "predictor": 14
+      }
+    }
+  },
+  "predictor": {
+    "totals": {
+      "verified_epochs": 48,
+      "verified_pages": 768,
+      "epochs": 48,
+      "selections": 768,
+      "candidates": 21206,
+      "overlap": 71,
+      "lru": 170,
+      "predictor": 177
+    },
+    "seeds": {
+      "12345": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 2164,
+        "overlap": 7,
+        "lru": 8,
+        "predictor": 13
+      },
+      "12346": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1237,
+        "overlap": 3,
+        "lru": 17,
+        "predictor": 13
+      },
+      "12347": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1181,
+        "overlap": 12,
+        "lru": 15,
+        "predictor": 18
+      },
+      "12348": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1055,
+        "overlap": 11,
+        "lru": 10,
+        "predictor": 19
+      },
+      "12349": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 707,
+        "overlap": 15,
+        "lru": 21,
+        "predictor": 12
+      },
+      "12350": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 3692,
+        "overlap": 0,
+        "lru": 11,
+        "predictor": 14
+      },
+      "12351": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 3445,
+        "overlap": 3,
+        "lru": 10,
+        "predictor": 13
+      },
+      "12352": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1568,
+        "overlap": 8,
+        "lru": 19,
+        "predictor": 17
+      },
+      "12353": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 2482,
+        "overlap": 5,
+        "lru": 15,
+        "predictor": 17
+      },
+      "12354": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 625,
+        "overlap": 5,
+        "lru": 10,
+        "predictor": 10
+      },
+      "12355": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 2027,
+        "overlap": 1,
+        "lru": 15,
+        "predictor": 13
+      },
+      "12356": {
+        "verified_epochs": 4,
+        "verified_pages": 64,
+        "epochs": 4,
+        "selections": 64,
+        "candidates": 1023,
+        "overlap": 1,
+        "lru": 19,
+        "predictor": 18
+      }
+    }
+  }
+}
