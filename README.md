@@ -435,3 +435,19 @@ The scoring throughput gap narrowed from 9.5% to 1.9% when comparing each pass w
 The new reader scored 74 epochs across 12 runs and selected the cold half in all 48 settled fixture decisions. Its median p99 was 2.8% lower than stock, with lower p99 in five of twelve paired seeds. Scoring alone cleared the 95% throughput threshold in this run. The T1 decision still depends on the full guarded page-out configuration. [Cold-region validation](results/sydney-damon/formal/score-gap-flip.json)
 
 For reproduction, use build 7941511 for the baseline and 2bac844 for the binary reader. On the pinned T0 guest with kernel.task_delayacct enabled before launching workers, run `make test libpmt-profile.so` and `sudo env PMT_FAULT_PROFILE=1 /usr/bin/python3 harness/sqlite_limit.py output.json --scoring-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. Restore the original delay accounting setting afterward.
+
+### T1 qualification with guarded page-out and the binary reader
+
+On the Sydney c7i.2xlarge, each arm ran 3,000 SQLite queries per seed at the same 19,660,800-byte cap (50% of calibrated memory). Seeds 12345–12356 used opaque records, EBS swap and zswap off. All six arm orders ran twice. Both PMT arms used the 32 KiB task-scoped perf ring and the same cold score. The guarded arm skipped pages read within the preceding 100 ms and advised at most 16 resident pages per decision and 64 per run.
+
+| Arm | Median p99 (ms) | Median queries/s | Throughput as % of stock | First reuse within 100 ms / advised |
+|---|---:|---:|---:|---:|
+| Stock Linux | 1.481 | 4,515 | 100.0% | — |
+| Scoring only | 1.336 | 4,187 | 92.7% | — |
+| Guarded page-out | 1.311 | 4,299 | 95.2% | 19/766 (2.5%) |
+
+The T0 gate for a T1 pilot **passed**. It requires lower median p99 than stock, at least 95% of stock throughput, and correct results. Guarded p99 was 11.5% lower and lower in 9/12 matched seeds. All 36 runs passed query and post-timing database integrity checks, used swap and recorded zero OOM kills.
+
+Among pages with a full 100 ms observation window after advice, SQLite reused 16/630 (2.5%). Across all advice, 16 of the 19 early reuses found the page nonresident immediately before the read. Stock and scoring alone issued zero PMT page-out requests. Early reuse is undefined for those arms.
+
+Reproduce at 7b3063d on the pinned T0 guest with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --bounded-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Raw per-seed results](results/sydney-damon/formal/guard-perf.json)
