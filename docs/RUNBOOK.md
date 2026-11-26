@@ -32,3 +32,5 @@ bash harness/archive_and_stop.sh "$PROFILE" "$REGION" "$INSTANCE_ID" "$RESULTS_D
 The helper checks the Project=pmt instance tag, archives the supplied directory, uploads it under its SHA-256 digest, downloads it, compares the bytes, and then requests and waits for the stop. Archive verification covers the files already staged. The operator must verify campaign completeness before invoking the command.
 
 For the Sydney rehearsal, record Free Tier balance before startup, during compute use, and after stopping. Record snapshot and restore completion independently. Restore the regional serial console setting after the rehearsal. [Starting observations](../results/sydney-rehearsal-start.json)
+
+Verify the guest login prompt through an authenticated serial connection. After installing kdump-tools, reboot normally and confirm the running kernel reserved crash memory before testing panic recovery. [Sydney access checkpoint](../results/sydney-recovery-access.json)

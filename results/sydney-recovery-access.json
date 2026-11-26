@@ -1,0 +1,13 @@
+{
+  "host_type": "c7i-flex.large",
+  "region": "ap-southeast-2",
+  "kernel_before_reboot": "7.0.0-1018-aws",
+  "ec2_system_health": "ok",
+  "ec2_instance_health": "ok",
+  "serial_ssh_authenticated": true,
+  "guest_login_prompt_observed": true,
+  "initial_crash_kernel_loaded": false,
+  "kdump_tools_installed": true,
+  "normal_reboot_requested": true,
+  "reported_remaining_credit_usd": 100.0
+}
