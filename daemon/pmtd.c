@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "pmt_uapi.h"
@@ -185,6 +186,12 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 	if (use_mmap) {
+		struct stat info;
+
+		if (fstat(fd, &info) || !S_ISCHR(info.st_mode)) {
+			fputs("mapped trace requires a character device\n", stderr);
+			goto out;
+		}
 		void *mapping = mmap(NULL, sizeof(*ring), PROT_READ, MAP_SHARED, fd, 0);
 
 		if (mapping == MAP_FAILED) {

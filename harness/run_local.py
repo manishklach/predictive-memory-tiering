@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,12 +82,29 @@ def main():
         result = subprocess.run(
             command, cwd=ROOT, env=environment, capture_output=True, text=True, timeout=timeout,
         )
-        if result.returncode:
-            raise SystemExit(f"{label} failed: {result.stderr or result.stdout}")
-        report["runs"].append({"label": label, **json.loads(result.stdout)})
+        run = {"label": label, "exit_code": result.returncode}
+        if result.stdout.strip():
+            try:
+                run.update(json.loads(result.stdout))
+            except ValueError:
+                run["invalid_output"] = result.stdout
+        if result.stderr:
+            run["stderr"] = result.stderr
+        report["runs"].append(run)
+        if result.returncode or "accesses" not in run:
+            break
+    report["complete"] = len(report["runs"]) == 5 and all(
+        run["exit_code"] == 0 and "accesses" in run for run in report["runs"]
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    with tempfile.NamedTemporaryFile(mode="w", dir=args.out.parent, delete=False,
+                                     encoding="utf-8") as staging:
+        json.dump(report, staging, indent=2)
+        staging.write("\n")
+    os.replace(staging.name, args.out)
     print(args.out)
+    if not report["complete"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

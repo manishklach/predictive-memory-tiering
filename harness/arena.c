@@ -333,7 +333,7 @@ int main(int argc, char **argv)
 	       disconnected ? "true" : "false", cgroup ? "true" : "false",
 	       time_us(controller_usage.ru_utime) + time_us(controller_usage.ru_stime),
 	       controller_usage.ru_maxrss, elapsed);
-	status = disconnected ? EXIT_FAILURE : EXIT_SUCCESS;
+	status = disconnected || errors ? EXIT_FAILURE : EXIT_SUCCESS;
 
 out:
 	if (connection >= 0)
