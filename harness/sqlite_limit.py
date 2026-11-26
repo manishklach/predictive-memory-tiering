@@ -1,4 +1,5 @@
 """Compare stock reclaim and pmtd detector-only on SQLite point queries under memory.max."""
+import resource
 import argparse
 from contextlib import nullcontext
 from itertools import permutations
@@ -146,6 +147,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
     elif mode in ("live", "live-score"):
         context = sampling(os.getpid(), detector=detector)
     with context as monitor:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
         start = time.perf_counter_ns()
         for key in keys:
             t = time.perf_counter_ns()
@@ -155,6 +157,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
                 raise ValueError("incorrect query result")
             checksum += row[0]
         elapsed = time.perf_counter_ns() - start
+        used = resource.getrusage(resource.RUSAGE_SELF)
         if detector:
             scored = [choice for stamp, choice in detector.decisions if start <= stamp <= start + elapsed]
         if mode == "damos":
@@ -169,6 +172,9 @@ def worker(db, mode, binary, interval, score_interval, seed):
             raise RuntimeError("controller failed")
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
+                          worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
+                          major_faults=used.ru_majflt - usage.ru_majflt,
+                          voluntary_switches=used.ru_nvcsw - usage.ru_nvcsw,
                           live_scored_epochs=len(scored) if detector else None,
                           live_candidate_epochs=sum(c is not None for c in scored) if detector else None,
                           live_region_records=len(monitor) if mode == "live" else None, damos_stats=stats, inline_score_calls=score_calls, history_only_calls=history_only_calls,
@@ -191,7 +197,7 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -238,8 +244,11 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         if live or live_score:
             arm = "live-score" if live_score else "live"
             orders = [("stock", arm), (arm, "stock")] * 6
+        if live_profile:
+            orders = list(permutations(("stock", "live", "live-score"))) * 2
+            random.Random(1207).shuffle(orders)
         for pair, order in enumerate(orders):
-            seed = 12345 + pair if extended or damos or live or live_score else 12345
+            seed = 12345 + pair if extended or damos or live or live_score or live_profile else 12345
             expected_checksum = control["checksum"] if seed == 12345 else None
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
@@ -276,6 +285,7 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--live-profile", action="store_true", help="profile stock, live sampling and live scoring across twelve matched seeds")
         group.add_argument("--live-score", action="store_true", help="rank live region samples during SQLite queries")
         group.add_argument("--live", action="store_true", help="time stock and PID-scoped observation over twelve matched seeds")
         group.add_argument("--damos", action="store_true", help="compare stock, DAMOS and PMT 256/256 across 12 seeds")
@@ -285,4 +295,4 @@ if __name__ == "__main__":
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile)
