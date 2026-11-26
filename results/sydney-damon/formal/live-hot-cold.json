@@ -1,0 +1,42 @@
+{
+  "kernel": "7.0.14-pmt-damon",
+  "half_bytes": 33554432,
+  "phases": [
+    {
+      "hot_half": 0,
+      "records": 172,
+      "mean_hits_per_half": [
+        18.947001139322918,
+        0.048482259114583336
+      ]
+    },
+    {
+      "hot_half": 1,
+      "records": 125,
+      "mean_hits_per_half": [
+        0.0,
+        18.988616943359375
+      ]
+    },
+    {
+      "hot_half": 0,
+      "records": 172,
+      "mean_hits_per_half": [
+        18.968017578125,
+        0.052581787109375
+      ]
+    },
+    {
+      "hot_half": 1,
+      "records": 128,
+      "mean_hits_per_half": [
+        0.0,
+        18.987955729166668
+      ]
+    }
+  ],
+  "shutdown": {
+    "target_exit": "passed",
+    "reader_sigterm": "passed"
+  }
+}

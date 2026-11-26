@@ -8,7 +8,7 @@ When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it
 
 The PID-scoped module emits synthetic sequence numbers through a bounded trace ring. A separate cooperative workload reports page accesses and residency to the C controller. The controller ranks eviction candidates and uses stride or Markov prediction. The workload applies the resulting advice to its own anonymous arena.
 
-The intended EC2 system will sample real target processes and tier their pages through local NVMe swap. Connecting that kernel path to the controller is still open. The replay detector and C controller currently use different scores, so replay cannot validate the controller's eviction decisions. [System design](docs/DESIGN.md) · [Cooperative runtime](docs/LOCAL-RUNTIME.md)
+PMT can also observe region access in a running Linux process by PID using the DAMON kernel backend and a private tracefs instance. Feeding those live observations to the C controller and validating eviction on local NVMe swap remain open. The replay detector and C controller currently use different scores, so replay cannot validate the controller's eviction decisions. [System design](docs/DESIGN.md) · [Cooperative runtime](docs/LOCAL-RUNTIME.md)
 
 ## What would count as a win?
 
@@ -271,3 +271,20 @@ Each mode occupied each run position four times. Each round used the same 3,000 
 DAMOS monitored the SQLite worker's anonymous database mapping with virtual-address sampling every 5 ms and aggregation every 100 ms. The page-out scheme selected regions with zero sampled accesses and age of at least two aggregation intervals. Scheme setup, counter collection, and teardown were outside query timing. At the end of the timed loop the kernel reported attempted actions in all 12 DAMOS runs and nonzero applied bytes in nine. Median cumulative applied bytes were 7,372,800 per run; these counters can include repeated actions on a region. A run with zero applied bytes still contributes to the comparison. [Calibration, per-run timings and counters](results/sydney-damon/formal/sqlite-timed-damos.json)
 
 To reproduce on the dedicated host with the custom kernel, EBS swap active, and an unused DAMON admin interface, run `make pmtd libpmt-profile.so`, then `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-timed-damos.json --damos`.
+
+### Live PID-scoped observation on Sydney T0
+
+The PMT userspace sampler attaches to one PID using the kernel's DAMON virtual-address backend. It samples every 5 ms and records per-region access counts and age every 100 ms through a private tracefs instance filtered to its monitoring thread. It creates zero DAMOS schemes. The sampler can attach to a running program without application access callbacks. Its output is a statistical estimate at region granularity. The PMT kernel module's synthetic trace ring is a separate interface. [Sampler](daemon/live_sample.py)
+
+On the Sydney `c7i.2xlarge`, a separate process alternated which of two 32 MiB anonymous ranges it read. Across four 1.5-second phases, the byte-weighted mean sampled hits per aggregation were 18.95–18.99 on the hot side and 0–0.053 on the cold side. The signal followed every reversal. This check supplied the range boundaries, separated the ranges by a page and disabled THP on the fixture mapping. An initial test with adjacent 4 MiB ranges failed to resolve the contrast; the passing test establishes discrimination for the reported fixture. Separate checks verified cleanup on target exit and reader SIGTERM. [Region measurements and shutdown checks](results/sydney-damon/formal/live-hot-cold.json)
+
+| SQLite mode | Median query p99 (ms) | Median queries/s |
+| --- | ---: | ---: |
+| Stock Linux | 1.351 | 3,786 |
+| Live PID observation | 1.218 | 4,196 |
+
+The two arms alternated order across 12 paired seeds (12345–12356), each running the same 3,000 queries at a 19,529,728-byte memory cap. SQLite observation used automatic PID-wide region discovery, with 77–116 captured region records per run. All 24 runs passed result checks, used swap, and recorded zero OOM kills. Both arms issued zero PMT scores, residency scans and page-out requests. Kernel sampling and trace recording ran during the queries; sampler setup, trace readout and shutdown were outside query timing.
+
+Observation had lower p99 in 8/12 rounds and higher throughput in 9/12. The measured medians show no slowdown in this workload. They do not establish that observing accelerates SQLite or quantify the observer's CPU use. [Calibration, per-seed timings and counters](results/sydney-damon/formal/sqlite-live-observe.json)
+
+On the custom T0 kernel, use `sudo python3 daemon/live_sample.py PID --seconds 5` to collect a region trace. Reproduce the checks with `sudo python3 harness/check_live_sample.py` and `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-live.json --live`, with swap active and the DAMON admin interface idle.
