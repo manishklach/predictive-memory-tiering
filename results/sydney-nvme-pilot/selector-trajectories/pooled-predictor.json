@@ -1,0 +1,290 @@
+{
+  "capture_sha256": {
+    "address": "a96e4a74e4a7d213f4d0db270670b347c46947186a27f3bf00fdf4b40833c153",
+    "lru": "26ecc9da0c5675f0ea74be30a4eee3cb71df592fe15151e784b8025c0b7df980",
+    "predictor": "7056ae009eb90a52c2d03064d2551b714a2646136cc5b21c7b9c227ca1546d16"
+  },
+  "seeds": {
+    "address": {
+      "12345": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 12,
+        "original": 11,
+        "pooled": 13
+      },
+      "12346": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 13,
+        "original": 13,
+        "pooled": 9
+      },
+      "12347": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 14,
+        "original": 9,
+        "pooled": 12
+      },
+      "12348": {
+        "epochs": 5,
+        "selections": 64,
+        "lru": 14,
+        "original": 10,
+        "pooled": 12
+      },
+      "12349": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 10,
+        "original": 15,
+        "pooled": 9
+      },
+      "12350": {
+        "epochs": 6,
+        "selections": 64,
+        "lru": 14,
+        "original": 12,
+        "pooled": 13
+      },
+      "12351": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 9,
+        "original": 10,
+        "pooled": 14
+      },
+      "12352": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 18,
+        "original": 10,
+        "pooled": 13
+      },
+      "12353": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 16,
+        "original": 10,
+        "pooled": 9
+      },
+      "12354": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 17,
+        "original": 8,
+        "pooled": 15
+      },
+      "12355": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 18,
+        "original": 16,
+        "pooled": 8
+      },
+      "12356": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 10,
+        "original": 12,
+        "pooled": 7
+      }
+    },
+    "lru": {
+      "12345": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 13,
+        "original": 14,
+        "pooled": 17
+      },
+      "12346": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 15,
+        "original": 12,
+        "pooled": 17
+      },
+      "12347": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 23,
+        "original": 17,
+        "pooled": 20
+      },
+      "12348": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 14,
+        "original": 6,
+        "pooled": 14
+      },
+      "12349": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 9,
+        "original": 13,
+        "pooled": 11
+      },
+      "12350": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 14,
+        "original": 10,
+        "pooled": 9
+      },
+      "12351": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 10,
+        "original": 15,
+        "pooled": 15
+      },
+      "12352": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 7,
+        "original": 7,
+        "pooled": 5
+      },
+      "12353": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 12,
+        "original": 18,
+        "pooled": 12
+      },
+      "12354": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 7,
+        "original": 15,
+        "pooled": 14
+      },
+      "12355": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 16,
+        "original": 16,
+        "pooled": 8
+      },
+      "12356": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 9,
+        "original": 14,
+        "pooled": 11
+      }
+    },
+    "predictor": {
+      "12345": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 8,
+        "original": 13,
+        "pooled": 18
+      },
+      "12346": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 17,
+        "original": 13,
+        "pooled": 15
+      },
+      "12347": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 15,
+        "original": 18,
+        "pooled": 22
+      },
+      "12348": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 10,
+        "original": 19,
+        "pooled": 23
+      },
+      "12349": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 21,
+        "original": 12,
+        "pooled": 18
+      },
+      "12350": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 11,
+        "original": 14,
+        "pooled": 19
+      },
+      "12351": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 10,
+        "original": 13,
+        "pooled": 11
+      },
+      "12352": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 19,
+        "original": 17,
+        "pooled": 19
+      },
+      "12353": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 15,
+        "original": 17,
+        "pooled": 12
+      },
+      "12354": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 10,
+        "original": 10,
+        "pooled": 10
+      },
+      "12355": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 15,
+        "original": 13,
+        "pooled": 8
+      },
+      "12356": {
+        "epochs": 4,
+        "selections": 64,
+        "lru": 19,
+        "original": 18,
+        "pooled": 10
+      }
+    }
+  },
+  "totals": {
+    "address": {
+      "epochs": 51,
+      "selections": 768,
+      "lru": 165,
+      "original": 136,
+      "pooled": 134
+    },
+    "lru": {
+      "epochs": 48,
+      "selections": 768,
+      "lru": 149,
+      "original": 157,
+      "pooled": 153
+    },
+    "predictor": {
+      "epochs": 48,
+      "selections": 768,
+      "lru": 170,
+      "original": 177,
+      "pooled": 185
+    }
+  }
+}

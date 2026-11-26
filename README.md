@@ -611,3 +611,19 @@ Replay reproduced all 1,536 live selections in order across 96 decisions. The pr
 The Sydney NVMe pilot used the same 12 held-out seeds, 60,000 queries per seed, 19,660,800-byte limit, frozen models, 100 ms guard and 16-page decision budget. Live per-page timestamps gave 150/768 early reuses for LRU and 178/768 for the predictor. Replay starts the clock at the shared pre-advice snapshot, slightly earlier. Median seed p99 and throughput were 111.75 µs and 30,996 queries/s for instrumented LRU, and 111.03 µs and 31,009 queries/s for the instrumented predictor. Candidate and read logging are included in both timings.
 
 [Per-seed comparisons](results/sydney-nvme-pilot/selector-trajectories/comparison.json) · [Joined candidate captures and SQLite runs](results/sydney-nvme-pilot/selector-trajectories) · [Replay implementation](harness/trajectory_replay.py)
+
+### Retraining across all three selector trajectories
+
+Pooling training data preserved the predictor's advantage on the address-order capture, but LRU still had fewer early reuses on the LRU and predictor captures. Each cell counts pages read again within 100 ms out of 768 selections. Each row uses identical candidate sets and recorded page budgets for all three rankings.
+
+| Capture trajectory | LRU | Original predictor | Pooled predictor |
+|---|---:|---:|---:|
+| Address order | 165 (21.48%) | 136 (17.71%) | 134 (17.45%) |
+| LRU | 149 (19.40%) | 157 (20.44%) | 153 (19.92%) |
+| Predictor | 170 (22.14%) | 177 (23.05%) | 185 (24.09%) |
+
+In each of 12 folds, all captures for one SQLite seed were reserved for evaluation. Training used candidate encounters from the other 11 seeds across all three trajectories, with equal weight per encounter. Features, smoothing and tie-breaking were unchanged. Per-seed LRU and original-predictor counts reproduced the previous results on all 36 trajectory/seed combinations.
+
+Across all trajectories the pooled predictor recorded 472 early reuses, versus 470 for the original predictor and 484 for LRU over 2,304 selections. The aggregate advantage over LRU comes entirely from the address-order trajectory. These are offline outcomes on the existing Sydney captures.
+
+Reproduce with `python harness/pooled_predictor_replay.py`. [Counts by trajectory and seed](results/sydney-nvme-pilot/selector-trajectories/pooled-predictor.json)
