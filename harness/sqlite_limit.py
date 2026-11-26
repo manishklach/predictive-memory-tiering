@@ -145,7 +145,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
     if mode == "damos":
         context = pageout(os.getpid(), address, size)
     elif mode in ("live", "live-score"):
-        context = sampling(os.getpid(), detector=detector)
+        context = sampling(os.getpid(), detector=detector, buffer_kb=32)
     with context as monitor:
         usage = resource.getrusage(resource.RUSAGE_SELF)
         start = time.perf_counter_ns()
@@ -197,7 +197,7 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -210,6 +210,13 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         if control["swap_peak_bytes"]:
             raise ValueError("calibration swapped")
         limit = control["peak_bytes"] // (2 * PAGE) * PAGE
+        if paired_calibration:
+            previous = json.loads(paired_calibration.read_text())
+            if previous["kernel"] != platform.release() or previous["pages"] != db.stat().st_size // PAGE:
+                raise ValueError("paired calibration requires the same kernel and database size")
+            limit = previous["calibration"]["peak_bytes"] // (2 * PAGE) * PAGE
+            if limit != previous["memory_max_bytes"]:
+                raise ValueError("reference cap differs from its half-memory calibration")
         runs = []
         before, after = ("detector-before", "detector-inline") if baseline else ("detector-full", "detector")
         orders = (("stock", before, after), (after, before, "stock"),
@@ -284,6 +291,7 @@ if __name__ == "__main__":
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
+        parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--live-profile", action="store_true", help="profile stock, live sampling and live scoring across twelve matched seeds")
         group.add_argument("--live-score", action="store_true", help="rank live region samples during SQLite queries")
@@ -295,4 +303,4 @@ if __name__ == "__main__":
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration)

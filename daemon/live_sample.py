@@ -15,7 +15,7 @@ EVENT = re.compile(r"damon_aggregated: target_id=0 nr_regions=\d+ (\d+)-(\d+): (
 
 
 @contextmanager
-def sampling(pid, ranges=(), detector=None):
+def sampling(pid, ranges=(), detector=None, buffer_kb=None):
     """Yield a record list, populated on exit. Kernel pins its target PID."""
     pidfd = os.pidfd_open(pid)
     trace = None
@@ -30,7 +30,10 @@ def sampling(pid, ranges=(), detector=None):
             raise RuntimeError("DAMON interface is already in use")
         trace = Path(tempfile.mkdtemp(prefix="pmt-", dir=TRACE))
         (trace / "tracing_on").write_text("0")
-        (trace / "buffer_size_kb").write_text("256")
+        # Online scoring drains continuously. Buffered captures can retain more history.
+        if buffer_kb is None:
+            buffer_kb = 32 if detector else 256
+        (trace / "buffer_size_kb").write_text(str(buffer_kb))
         (ADMIN / "nr_kdamonds").write_text("1")
         configured = True
         (daemon / "contexts/nr_contexts").write_text("1")
