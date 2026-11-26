@@ -309,3 +309,25 @@ make libpmt-profile.so pmtd
 sudo python3 harness/check_live_sample.py --score
 sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-live-detector.json --live-score
 ```
+
+### Profiling the SQLite throughput gap on Sydney T0
+
+Each of three passes used the same 12 seeds, 3,000 queries per run, and all six orders of stock, sampling only and live scoring twice. All three passes used the first stock calibration's 50% cgroup limit. The second pass reduced the tracefs buffer from 256 to 32 KiB per CPU (2 MiB to 256 KiB requested across eight vCPUs). The third pass also increased the scoring reader idle wait from 5 to 50 ms. The 5 ms DAMON sampling and 100 ms aggregation intervals stayed fixed. The harness checks for trace overruns on teardown.
+
+| Buffer per CPU | SQLite arm | Median p99 (ms) | Median queries/s | Worker CPU (ms) | Major faults | Peak swap (MiB) |
+|---|---|---:|---:|---:|---:|---:|
+| Stock (before) | Stock Linux | 1.574 | 4,586 | 82.8 | 779 | 31.75 |
+| 256 KiB (before) | Sampling only | 1.570 | 3,991 | 81.8 | 841 | 33.60 |
+| 256 KiB (before) | Live scoring | 1.354 | 4,038 | 106.1 | 880.5 | 32.64 |
+| Stock (after) | Stock Linux | 1.726 | 4,254 | 85.2 | 802 | 31.79 |
+| 32 KiB (after) | Sampling only | 1.477 | 4,198 | 86.7 | 832.5 | 33.50 |
+| 32 KiB (after) | Live scoring | 1.438 | 3,997 | 107.1 | 880 | 33.37 |
+| Stock (batched) | Stock Linux | 1.584 | 4,498 | 86.6 | 797.5 | 32.47 |
+| 32 KiB (batched) | Sampling only | 1.551 | 4,254 | 87.3 | 840.5 | 31.64 |
+| 32 KiB (batched) | Live scoring | 1.577 | 3,912 | 99.0 | 882 | 33.18 |
+
+CPU and fault counts cover the query loop in the SQLite worker, including its scorer thread. Kernel DAMON thread CPU is outside this counter. Peak swap covers the worker's whole cgroup lifetime. The query timer excludes attach and teardown. Reproduce the first pass at commit 082cbac with `sudo /usr/bin/python3 harness/sqlite_limit.py before.json --live-profile`, then run the same command at fcabbf3 with `after.json --live-profile --paired-calibration before.json`. [Before](results/sydney-damon/formal/live-profile-before.json) · [After](results/sydney-damon/formal/live-profile-after.json) · [Batched reader](results/sydney-damon/formal/live-profile-batched.json) · [Batched cold-region check](results/sydney-damon/formal/live-profile-flip-batched.json) · [Cold-region regression check](results/sydney-damon/formal/live-profile-flip.json)
+
+The retained configuration uses the 32 KiB buffer and original 5 ms reader wait. Sampling alone reproduced the initial loss. With smaller buffers, sampling throughput rose from 3,991 to 4,198 queries/s, while scoring throughput moved from 4,038 to 3,997. Stock also varied between passes. The median paired scoring throughput difference moved from -9.1% to -6.8%, with individual post-change pairs ranging from -17.1% to +8.4%. These trials establish a smaller buffer footprint and a remaining scoring gap. They do not isolate buffer allocation as the cause of the original loss.
+
+The batched-reader trial at cebd6b4 cut median voluntary context switches from 1,720 to 1,108 and worker CPU from 107 to 99 ms. Its scoring throughput fell to 3,912 queries/s, so the reader change was reverted. With the retained settings, all 48 settled fixture decisions picked the cold range and the SQLite detector scored 75 epochs. Across all 108 timed runs, paired query checksums matched, swap was active, and PMT issued zero page-out requests. No OOM kills were recorded.
