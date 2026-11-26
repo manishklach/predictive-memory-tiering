@@ -1,0 +1,349 @@
+{
+  "kernel": "6.6.87.2-microsoft-standard-WSL2+",
+  "sqlite": "3.45.1",
+  "apsw": "3.43.0.0",
+  "pages": 7018,
+  "requests": 3000,
+  "controller_sha256": "6ac3738770dc697bc9dd83bc2cd9f191e02f0ca35332c3f97ade2e4b2a3ac6a3",
+  "calibration": {
+    "mode": "stock",
+    "p99_us": 70.21,
+    "queries_per_s": 42214.87251910582,
+    "elapsed_ns": 71065002,
+    "profile_ns": {
+      "residency": 0,
+      "controller_round_trip": 0,
+      "pageout": 0
+    },
+    "reads": 7258,
+    "pageout_requests": 0,
+    "checksum": 10492491,
+    "peak_bytes": 38555648,
+    "swap_peak_bytes": 0,
+    "memory_events": [
+      "low 0",
+      "high 0",
+      "max 0",
+      "oom 0",
+      "oom_kill 0",
+      "oom_group_kill 0"
+    ]
+  },
+  "memory_max_bytes": 19275776,
+  "runs": [
+    {
+      "pair": 1,
+      "mode": "stock",
+      "p99_us": 624.286,
+      "queries_per_s": 11532.069356771193,
+      "elapsed_ns": 260144117,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30306304,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 151",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 1,
+      "mode": "detector-full",
+      "p99_us": 4334.969,
+      "queries_per_s": 610.4486675800114,
+      "elapsed_ns": 4914418131,
+      "profile_ns": {
+        "residency": 2957326043,
+        "controller_round_trip": 1224494392,
+        "pageout": 74512622
+      },
+      "reads": 7258,
+      "pageout_requests": 7238,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30810112,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 147",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 1,
+      "mode": "detector",
+      "p99_us": 2774.005,
+      "queries_per_s": 1385.1489469731564,
+      "elapsed_ns": 2165832062,
+      "profile_ns": {
+        "residency": 215563959,
+        "controller_round_trip": 1146718747,
+        "pageout": 103979047
+      },
+      "reads": 7258,
+      "pageout_requests": 7223,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30638080,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 143",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "detector",
+      "p99_us": 1980.93,
+      "queries_per_s": 1664.0173476692792,
+      "elapsed_ns": 1802865820,
+      "profile_ns": {
+        "residency": 205946852,
+        "controller_round_trip": 938207986,
+        "pageout": 83883748
+      },
+      "reads": 7258,
+      "pageout_requests": 7204,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31428608,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 147",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "detector-full",
+      "p99_us": 3645.335,
+      "queries_per_s": 593.1241416026925,
+      "elapsed_ns": 5057963063,
+      "profile_ns": {
+        "residency": 3069208577,
+        "controller_round_trip": 1223155089,
+        "pageout": 85837117
+      },
+      "reads": 7258,
+      "pageout_requests": 7242,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31547392,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 141",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "stock",
+      "p99_us": 670.004,
+      "queries_per_s": 10477.302088006865,
+      "elapsed_ns": 286333254,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30162944,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 140",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "detector-full",
+      "p99_us": 3133.693,
+      "queries_per_s": 625.2702678626981,
+      "elapsed_ns": 4797925240,
+      "profile_ns": {
+        "residency": 3002831185,
+        "controller_round_trip": 1100298844,
+        "pageout": 71858625
+      },
+      "reads": 7258,
+      "pageout_requests": 7242,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31199232,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 144",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "stock",
+      "p99_us": 730.251,
+      "queries_per_s": 10052.968016160561,
+      "elapsed_ns": 298419332,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31223808,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 142",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "detector",
+      "p99_us": 1685.21,
+      "queries_per_s": 1804.623604481559,
+      "elapsed_ns": 1662396520,
+      "profile_ns": {
+        "residency": 196964962,
+        "controller_round_trip": 889807202,
+        "pageout": 72462441
+      },
+      "reads": 7258,
+      "pageout_requests": 7191,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30461952,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 143",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "detector",
+      "p99_us": 1746.106,
+      "queries_per_s": 1805.9709992011872,
+      "elapsed_ns": 1661156243,
+      "profile_ns": {
+        "residency": 196048447,
+        "controller_round_trip": 890693927,
+        "pageout": 71229677
+      },
+      "reads": 7258,
+      "pageout_requests": 7201,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 30969856,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 139",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "stock",
+      "p99_us": 767.248,
+      "queries_per_s": 9879.004521165934,
+      "elapsed_ns": 303674322,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31326208,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 146",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "detector-full",
+      "p99_us": 3348.952,
+      "queries_per_s": 620.9149837640832,
+      "elapsed_ns": 4831579328,
+      "profile_ns": {
+        "residency": 2947495626,
+        "controller_round_trip": 1183139188,
+        "pageout": 71675132
+      },
+      "reads": 7258,
+      "pageout_requests": 7240,
+      "checksum": 10492491,
+      "peak_bytes": 19275776,
+      "swap_peak_bytes": 31653888,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 147",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    }
+  ],
+  "median": {
+    "stock": {
+      "p99_us": 700.1275,
+      "queries_per_s": 10265.135052083713
+    },
+    "detector-full": {
+      "p99_us": 3497.1435,
+      "queries_per_s": 615.6818256720474
+    },
+    "detector": {
+      "p99_us": 1863.518,
+      "queries_per_s": 1734.320476075419
+    }
+  }
+}

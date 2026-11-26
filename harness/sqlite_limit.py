@@ -34,8 +34,9 @@ def worker(db, mode):
     libc = ctypes.CDLL(None, use_errno=True)
     bitmap = ctypes.create_string_buffer(pages)
     reads = evictions = 0
+    profile = dict(residency=0, controller_round_trip=0, pageout=0)
     ctl = None
-    if mode == "detector":
+    if mode != "stock":
         ctl = subprocess.Popen([ROOT / "pmtd", "--control", str(pages), str(pages // 2),
                                 "10", "1", "none"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     base = apsw.vfsnames()[0]
@@ -47,15 +48,24 @@ def worker(db, mode):
             for page in range(offset // PAGE, (offset + amount + PAGE - 1) // PAGE):
                 reads += 1
                 if ctl:
-                    if libc.mincore(ctypes.c_void_p(address), ctypes.c_size_t(size), bitmap):
+                    t = time.perf_counter_ns()
+                    refresh = mode == "detector-full" or (reads - 1) % 16 == 0
+                    if refresh and libc.mincore(ctypes.c_void_p(address), ctypes.c_size_t(size), bitmap):
                         raise OSError(ctypes.get_errno(), "mincore")
                     bitmap[page] = 1  # The just-read page was resident at access.
+                    now = time.perf_counter_ns()
+                    profile['residency'] += now - t
                     ctl.stdin.write(struct.pack("=QII", time.monotonic_ns(), page, 0) + bitmap.raw)
                     ctl.stdin.flush()
                     victim, fetch = struct.unpack("=II", ctl.stdout.read(8))
+                    replied = time.perf_counter_ns()
+                    profile['controller_round_trip'] += replied - now
                     assert fetch == 0xffffffff
                     if victim != 0xffffffff:
                         backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), victim * PAGE, PAGE)
+                        if mode == "detector":
+                            bitmap[victim] = 0  # Provisional until the next scan or touch.
+                        profile['pageout'] += time.perf_counter_ns() - replied
                         evictions += 1
             return data
 
@@ -73,6 +83,8 @@ def worker(db, mode):
     keys = [rng.randrange(ROWS if i % 2 else 64) for i in range(REQUESTS)]
     times = []
     checksum = 0
+    for stage in profile:
+        profile[stage] = 0
     start = time.perf_counter_ns()
     for key in keys:
         t = time.perf_counter_ns()
@@ -90,7 +102,7 @@ def worker(db, mode):
             raise RuntimeError("controller failed")
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
-                          reads=reads, pageout_requests=evictions, checksum=checksum)))
+                          profile_ns=profile, reads=reads, pageout_requests=evictions, checksum=checksum)))
 
 
 def run(db, mode, limit):
@@ -124,12 +136,14 @@ def main(output):
         limit = control["peak_bytes"] // (2 * PAGE) * PAGE
         runs = []
         for pair in range(4):
-            for mode in (("stock", "detector") if pair % 2 == 0 else ("detector", "stock")):
+            orders = (("stock", "detector-full", "detector"), ("detector", "detector-full", "stock"),
+                      ("detector-full", "stock", "detector"), ("detector", "stock", "detector-full"))
+            for mode in orders[pair]:
                 record = run(db, mode, limit)
                 assert record["checksum"] == control["checksum"]
                 runs.append(dict(pair=pair + 1, **record))
         summary = {mode: {metric: statistics.median(r[metric] for r in runs if r["mode"] == mode)
-                          for metric in ("p99_us", "queries_per_s")} for mode in ("stock", "detector")}
+                          for metric in ("p99_us", "queries_per_s")} for mode in ("stock", "detector-full", "detector")}
         output.write_text(json.dumps(dict(kernel=platform.release(), sqlite=apsw.sqlitelibversion(),
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),

@@ -96,4 +96,18 @@ Stock Linux handled this workload faster in all four pairs. Each run issued the 
 
 Both modes used the same read-only SQLite VFS backed by anonymous memory on WSL2. Each received a fresh cgroup with a 19,275,776-byte RAM limit, half the unconstrained stock peak rounded down to a page. Swap was active in every limited run. The detector shared the application's cgroup. For each logical page read it synchronously queried residency, sent the full residency map to pmtd, waited for advice, and requested page-out when advised. The timing includes those costs. The experiment measures this complete prototype path. It does not isolate scoring cost or measure EC2 NVMe performance.
 
-Run order alternated by pair. Each query result was checked against its expected key and payload length. For reproduction on Linux with cgroup v2, swap, and Python APSW, build with `make pmtd`, then run `sudo /usr/bin/python3 harness/sqlite_limit.py results/local-sqlite-50.json`. [Harness](harness/sqlite_limit.py) · [Calibration and individual runs](results/local-sqlite-50.json)
+Run order alternated by pair. Each query result was checked against its expected key and payload length. For reproduction on Linux with cgroup v2, swap, and Python APSW, build with `make pmtd`, then run `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-comparison.json`. [Harness](harness/sqlite_limit.py) · [Calibration and individual runs](results/local-sqlite-50.json)
+
+### Profiling and reducing residency-check time
+
+A full `mincore` scan of all 7,018 database pages on every logical page read was the largest measured detector cost. The SQLite adapter now refreshes the full map once per 16 observations, marks each touched page resident, and provisionally clears a victim after a successful page-out request. The controller still scores every observation. Linux can reclaim pages between scans and page-out is advisory, so the cached map can change victim selection. The full-scan mode remains available in the comparison.
+
+All three modes ran four times on the same WSL2 host, with identical requests and a common 19,275,776-byte cgroup cap. Values are medians across runs. Stage times are cumulative wall-clock seconds during the 3,000 timed queries.
+
+| Mode | p99 (ms) | Queries/s | Residency (s) | Controller round trip (s) | Page-out (s) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Stock Linux | 0.700 | 10,265 | — | — | — |
+| Full scan per observation | 3.497 | 616 | 2.980 | 1.203 | 0.073 |
+| Refresh every 16 observations | 1.864 | 1,734 | 0.201 | 0.914 | 0.078 |
+
+The change cut median detector p99 by 47% and raised throughput 2.82×. Stock Linux was faster in every repeat. The remaining largest measured stage is the synchronous controller round trip, which includes serialization, pipe transfers, scheduling, and detector scoring. Page-out timing covers the advice call and bookkeeping; kernel writeback may continue after the call returns. Other query work lies outside these three timers. Run the reproduction command above to repeat the three-way comparison. [Initial detector profile](results/sqlite-profile-before.json) · [Three-way comparison and per-run timers](results/sqlite-profile-50.json)

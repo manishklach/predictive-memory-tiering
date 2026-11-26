@@ -1,0 +1,245 @@
+{
+  "kernel": "6.6.87.2-microsoft-standard-WSL2+",
+  "sqlite": "3.45.1",
+  "apsw": "3.43.0.0",
+  "pages": 7018,
+  "requests": 3000,
+  "controller_sha256": "6ac3738770dc697bc9dd83bc2cd9f191e02f0ca35332c3f97ade2e4b2a3ac6a3",
+  "calibration": {
+    "mode": "stock",
+    "p99_us": 65.278,
+    "queries_per_s": 44539.274829046015,
+    "elapsed_ns": 67356283,
+    "profile_ns": {
+      "residency": 0,
+      "controller_round_trip": 0,
+      "pageout": 0
+    },
+    "reads": 7258,
+    "pageout_requests": 0,
+    "checksum": 10492491,
+    "peak_bytes": 38522880,
+    "swap_peak_bytes": 0,
+    "memory_events": [
+      "low 0",
+      "high 0",
+      "max 0",
+      "oom 0",
+      "oom_kill 0",
+      "oom_group_kill 0"
+    ]
+  },
+  "memory_max_bytes": 19259392,
+  "runs": [
+    {
+      "pair": 1,
+      "mode": "stock",
+      "p99_us": 745.548,
+      "queries_per_s": 9363.910700965718,
+      "elapsed_ns": 320378963,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 31752192,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 148",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 1,
+      "mode": "detector",
+      "p99_us": 3212.95,
+      "queries_per_s": 591.0386866813357,
+      "elapsed_ns": 5075809871,
+      "profile_ns": {
+        "residency": 3142135728,
+        "controller_round_trip": 1196651484,
+        "pageout": 76702198
+      },
+      "reads": 7258,
+      "pageout_requests": 7239,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 32038912,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 149",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "detector",
+      "p99_us": 3850.43,
+      "queries_per_s": 582.2899244592563,
+      "elapsed_ns": 5152072660,
+      "profile_ns": {
+        "residency": 3111159485,
+        "controller_round_trip": 1206681915,
+        "pageout": 73080004
+      },
+      "reads": 7258,
+      "pageout_requests": 7240,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 31293440,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 145",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 2,
+      "mode": "stock",
+      "p99_us": 703.443,
+      "queries_per_s": 11309.853000298726,
+      "elapsed_ns": 265255437,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 30240768,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 136",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "stock",
+      "p99_us": 563.379,
+      "queries_per_s": 12005.661726002041,
+      "elapsed_ns": 249882103,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 29995008,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 143",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 3,
+      "mode": "detector",
+      "p99_us": 3121.536,
+      "queries_per_s": 625.5291504859877,
+      "elapsed_ns": 4795939562,
+      "profile_ns": {
+        "residency": 2899880582,
+        "controller_round_trip": 1186638502,
+        "pageout": 73613297
+      },
+      "reads": 7258,
+      "pageout_requests": 7241,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 31068160,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 148",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "detector",
+      "p99_us": 3799.486,
+      "queries_per_s": 619.715146053314,
+      "elapsed_ns": 4840933805,
+      "profile_ns": {
+        "residency": 2976739648,
+        "controller_round_trip": 1093249397,
+        "pageout": 68142117
+      },
+      "reads": 7258,
+      "pageout_requests": 7239,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 30629888,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 144",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    },
+    {
+      "pair": 4,
+      "mode": "stock",
+      "p99_us": 692.024,
+      "queries_per_s": 10858.939784156491,
+      "elapsed_ns": 276270065,
+      "profile_ns": {
+        "residency": 0,
+        "controller_round_trip": 0,
+        "pageout": 0
+      },
+      "reads": 7258,
+      "pageout_requests": 0,
+      "checksum": 10492491,
+      "peak_bytes": 19259392,
+      "swap_peak_bytes": 30601216,
+      "memory_events": [
+        "low 0",
+        "high 0",
+        "max 144",
+        "oom 0",
+        "oom_kill 0",
+        "oom_group_kill 0"
+      ]
+    }
+  ],
+  "median": {
+    "stock": {
+      "p99_us": 697.7335,
+      "queries_per_s": 11084.396392227609
+    },
+    "detector": {
+      "p99_us": 3506.218,
+      "queries_per_s": 605.3769163673248
+    }
+  }
+}
