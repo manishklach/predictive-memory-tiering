@@ -68,7 +68,8 @@ class RegionDetector:
                 try:
                     chunk = os.read(self.fd, 65536)
                 except BlockingIOError:
-                    self.stop.wait(.005)
+                    # Drain twice per aggregation interval while the pipe is idle.
+                    self.stop.wait(.05)
                     continue
                 if not chunk:
                     break
