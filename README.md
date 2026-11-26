@@ -401,8 +401,16 @@ Reproduce on the pinned T0 kernel with swap active and zswap off using `make tes
 
 The cooperative SQLite selector now skips a resident page if the VFS read it during the preceding 100 ms. It records every page touched by a cross-page read. The detector still chooses the cold region. Each decision can advise at most 16 pages, and each worker can advise at most 64 distinct pages. A regression test verifies protection at the exact 100 ms boundary, expiry, and reuse counts when a query loop ends early.
 
-The selection trial compares stock Linux, scoring alone, the original ascending-address selector and the guarded selector. Each arm runs in each position three times across seeds 12345–12356. The report counts first reuse within 100 ms for all advised pages and separately for pages with a full 100 ms left in the timed query loop.
+The Sydney T0 experiment used the same 12 SQLite seeds, 3,000 queries per seed, opaque payloads, 19,660,800-byte cap, and zswap-off kernel setup as the prior bounded trial. Both eviction arms advise at most 16 resident pages per cold-region decision and 64 distinct pages per run. The new selector timestamps SQLite VFS reads and skips pages touched in the previous 100 ms. This uses cooperative read information and adds its cost to timed queries. The original ascending-address selector ran alongside it. Each arm occupied each run position three times.
 
-The Sydney T0 attempt on November 26, 2026 used the previous 19,660,800-byte cap and zswap-off configuration. The instance stopped before the operator received a result. An AWS Organizations service control policy denied the restart. Guarded early reuse, p99 and throughput remain unverified. The previous 317/714 early reuses apply to the original selector.
+| Arm | Median p99 (ms) | Median queries/s | First reuse within 100 ms / advised pages | Full-window early reuse |
+|---|---:|---:|---:|---:|
+| Stock Linux | 1.490 | 4,608 | — | — |
+| Live scoring only | 1.387 | 4,020 | — | — |
+| Original selection | 1.294 | 4,167 | 212/711 (29.8%) | 210/631 (33.3%) |
+| Recent-read guard | 1.328 | 3,992 | 20/725 (2.8%) | 19/613 (3.1%) |
 
-To reproduce on the pinned T0 guest with swap active and zswap off, build with `make test libpmt-profile.so` and run `sudo /usr/bin/python3 harness/sqlite_limit.py selection.json --selection-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Page selector](harness/bounded_eviction.py) · [Previous T0 result](results/sydney-damon/formal/bounded-pageout.json)
+Reuse is measured at the first SQLite mapping read after advice. The final column includes only pages with 100 ms of query execution remaining after advice. All 48 timed runs passed paired query checksums and post-run database mapping verification, used swap and had zero OOM kills. Reproduce on the pinned T0 guest with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py selection.json --selection-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Per-seed data and counters](results/sydney-damon/formal/selection-trial.json)
+
+
+The guard reduced early reuse from 29.8% to 2.8% of advised pages. Among pages with a full observation window the rates were 33.3% and 3.1%. The old selector found 206 pages nonresident on early reuse, compared with 15 for the guard. This improvement in selection did not close the throughput gap. Guarded throughput reached 86.6% of stock, below the 95% T1 threshold. Median p99 was 10.9% lower than stock and lower in 11 of 12 paired seeds. T1 remains on hold.
