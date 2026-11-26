@@ -28,12 +28,13 @@ def sampling(pid, ranges=(), detector=None, buffer_kb=None):
     try:
         if (ADMIN / "nr_kdamonds").read_text().strip() != "0":
             raise RuntimeError("DAMON interface is already in use")
-        trace = Path(tempfile.mkdtemp(prefix="pmt-", dir=TRACE))
-        (trace / "tracing_on").write_text("0")
-        # Online scoring drains continuously. Buffered captures can retain more history.
+        binary_stream = bool(ranges and detector)
         if buffer_kb is None:
             buffer_kb = 32 if detector else 256
-        (trace / "buffer_size_kb").write_text(str(buffer_kb))
+        if not binary_stream:
+            trace = Path(tempfile.mkdtemp(prefix="pmt-", dir=TRACE))
+            (trace / "tracing_on").write_text("0")
+            (trace / "buffer_size_kb").write_text(str(buffer_kb))
         (ADMIN / "nr_kdamonds").write_text("1")
         configured = True
         (daemon / "contexts/nr_contexts").write_text("1")
@@ -56,17 +57,23 @@ def sampling(pid, ranges=(), detector=None, buffer_kb=None):
         if alive.poll(0):
             raise RuntimeError("process exited during attach")
         kpid = int((daemon / "pid").read_text())
-        event = trace / "events/damon/damon_aggregated"
-        (event / "filter").write_text(f"common_pid == {kpid}")
-        (event / "enable").write_text("1")
-        (trace / "tracing_on").write_text("1")
-        if detector:
-            detector.start(trace)
+        if binary_stream:
+            from perf_ring import AggregateRing
+            detector.start(ring=AggregateRing(kpid, buffer_kb * 1024))
+        else:
+            event = trace / "events/damon/damon_aggregated"
+            (event / "filter").write_text(f"common_pid == {kpid}")
+            (event / "enable").write_text("1")
+            (trace / "tracing_on").write_text("1")
+            if detector:
+                detector.start(trace)
         try:
             yield records
         finally:
             if detector:
                 detector.close()
+        if binary_stream:
+            return
         (trace / "tracing_on").write_text("0")
         for path in (trace / "per_cpu").glob("cpu*/stats"):
             if re.search(r"^overrun:\s*[1-9]", path.read_text(), re.M):

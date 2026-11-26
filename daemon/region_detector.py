@@ -24,6 +24,7 @@ class RegionDetector:
         self.partial = []
         self.profile = dict(read_cpu_ns=0, wait_cpu_ns=0, decode_score_cpu_ns=0, reads=0, empty_reads=0)
         self.error = None
+        self.ring = None
 
     def consume(self, line):
         match = LINE.search(line)
@@ -31,12 +32,14 @@ class RegionDetector:
             return
         stamp, count, start, end, hits = match.groups()
         count, start, end, hits = map(int, (count, start, end, hits))
+        self.aggregate(int(float(stamp) * 1e9), count, start, end, hits)
+
+    def aggregate(self, now, count, start, end, hits):
         if self.partial and start < self.partial[-1][1]:
             self.partial.clear()
         self.partial.append((start, end, hits))
         if len(self.partial) != count:
             return
-        now = int(float(stamp) * 1e9)
         states = []
         best = 0
         winner = None
@@ -57,8 +60,9 @@ class RegionDetector:
         self.decisions.append((time.monotonic_ns(), winner))
         self.partial.clear()
 
-    def start(self, trace):
-        self.fd = os.open(trace / "trace_pipe", os.O_RDONLY | os.O_NONBLOCK)
+    def start(self, trace=None, ring=None):
+        self.ring = ring
+        self.fd = ring.fd if ring else os.open(trace / "trace_pipe", os.O_RDONLY | os.O_NONBLOCK)
         try:
             self.wake_fd = os.eventfd(0, os.EFD_CLOEXEC)
             try:
@@ -68,7 +72,7 @@ class RegionDetector:
                 os.close(self.wake_fd)
                 raise
         except BaseException:
-            os.close(self.fd)
+            self.close_source()
             raise
 
     def read(self):
@@ -87,7 +91,7 @@ class RegionDetector:
                     raise OSError("trace pipe poll failed")
                 tick = time.thread_time_ns()
                 try:
-                    chunk = os.read(self.fd, 65536)
+                    chunk = self.ring.read() if self.ring else os.read(self.fd, 65536)
                 except BlockingIOError:
                     done = time.thread_time_ns()
                     self.profile["empty_reads"] += 1
@@ -98,17 +102,26 @@ class RegionDetector:
                 self.profile["read_cpu_ns"] += done - tick
                 if not chunk:
                     break
-                *lines, pending = (pending + chunk).split(b"\n")
-                for line in lines:
-                    self.consume(line)
+                if self.ring:
+                    self.ring.decode(chunk, self)
+                else:
+                    *lines, pending = (pending + chunk).split(b"\n")
+                    for line in lines:
+                        self.consume(line)
                 self.profile['decode_score_cpu_ns'] += time.thread_time_ns() - done
         except Exception as exc:
             self.error = exc
+
+    def close_source(self):
+        if self.ring:
+            self.ring.close()
+        else:
+            os.close(self.fd)
 
     def close(self):
         os.eventfd_write(self.wake_fd, 1)
         self.thread.join()
         os.close(self.wake_fd)
-        os.close(self.fd)
+        self.close_source()
         if self.error:
             raise self.error

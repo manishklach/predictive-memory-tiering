@@ -8,8 +8,8 @@ all: pmtd pmt-local
 pmtd: daemon/pmtd.c daemon/control.c include/pmt_uapi.h include/pmt_control.h
 	$(CC) $(CPPFLAGS) -Iinclude $(CFLAGS) -std=c11 -Wall -Wextra -Werror $(filter %.c,$^) $(LDFLAGS) -o $@
 
-libpmt-profile.so: daemon/control.c include/pmt_control.h
-	$(CC) $(CPPFLAGS) -DPMT_PROFILE -Iinclude $(CFLAGS) -std=c11 -Wall -Wextra -Werror -shared -fPIC $< $(LDFLAGS) -o $@
+libpmt-profile.so: daemon/control.c daemon/perf_ring.c include/pmt_control.h
+	$(CC) $(CPPFLAGS) -DPMT_PROFILE -Iinclude $(CFLAGS) -std=c11 -Wall -Wextra -Werror -shared -fPIC $(filter %.c,$^) $(LDFLAGS) -o $@
 
 pmtd-profile: daemon/pmtd.c daemon/control.c include/pmt_uapi.h include/pmt_control.h
 	$(CC) $(CPPFLAGS) -DPMT_PROFILE -Iinclude $(CFLAGS) -std=c11 -Wall -Wextra -Werror $(filter %.c,$^) $(LDFLAGS) -o $@
