@@ -134,3 +134,20 @@ sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-roundtrip.json --profi
 ```
 
 The recorded pipe baseline was built at commit `5d490ca`. The raw report includes hashes for both measured binaries.
+
+### SQLite with observation, scoring, and page-out enabled in stages
+
+Stock Linux had the lowest median p99 and highest median throughput. The largest throughput drop came when the adapter began observing residency: it refreshed the 7,018-page map every 16 page observations and marked each touched page resident. The scoring-only mode also ran the in-process C detector on every observation and counted its eviction advice. The final mode issued a page-out request for each advised victim. Linux reclaim remained active in all four modes.
+
+| Mode | Median query p99 (ms) | Median throughput (queries/s) |
+| --- | ---: | ---: |
+| Stock Linux | 0.690 | 10,503 |
+| Observation only | 0.868 | 6,364 |
+| Observation and scoring | 1.006 | 4,278 |
+| Observation, scoring, and page-out | 1.124 | 3,946 |
+
+Each mode ran the same 3,000 queries four times on WSL2 and occupied each run position once. Each run had a fresh cgroup capped at 19,410,944 bytes, half the newly calibrated stock peak. All 16 runs returned the expected rows, used swap, and recorded zero OOM kills. Scoring-only issued zero page-out requests. The full detector issued 7,160–7,172 requests per run; the count measures advice submitted to Linux, not pages confirmed evicted.
+
+Enabling page-out reduced median throughput by a further 7.8% and increased median p99 by 11.7% relative to scoring only. The full detector was slower in three of the four rounds on both metrics. These differences include the effect of subsequent memory accesses and reclaim. [Individual runs, counters, and calibration](results/sqlite-stages-50.json)
+
+To reproduce, run `make pmtd libpmt-profile.so` and then `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-stages.json --stages`.

@@ -34,10 +34,11 @@ def worker(db, mode, binary):
     address = ctypes.addressof(ctypes.c_char.from_buffer(backing))
     libc = ctypes.CDLL(None, use_errno=True)
     bitmap = ctypes.create_string_buffer(pages)
-    reads = evictions = 0
+    reads = evictions = eviction_advice = 0
     profile = dict(residency=0, controller_round_trip=0, pageout=0, scoring=0, pipe_path=0, inline_path=0)
     ctl = None
-    inline = mode == "detector-inline"
+    inline = mode in ("scoring-only", "detector-inline")
+    observe = mode != "stock"
     if inline:
         lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
         ptr = ctypes.c_void_p
@@ -53,18 +54,18 @@ def worker(db, mode, binary):
             raise MemoryError("allocate inline policy")
         observation = ctypes.create_string_buffer(16)
         advice = (ctypes.c_uint32 * 2)()
-    elif mode != "stock":
+    elif observe and mode != "observation-only":
         ctl = subprocess.Popen([(binary or ROOT / "pmtd"), "--control", str(pages), str(pages // 2),
                                 "10", "1", "none"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     base = apsw.vfsnames()[0]
 
     class File(apsw.VFSFile):
         def xRead(self, amount, offset):
-            nonlocal reads, evictions
+            nonlocal reads, evictions, eviction_advice
             data = backing[offset:offset + amount]
             for page in range(offset // PAGE, (offset + amount + PAGE - 1) // PAGE):
                 reads += 1
-                if ctl or inline:
+                if observe:
                     t = time.perf_counter_ns()
                     refresh = mode == "detector-full" or (reads - 1) % 16 == 0
                     if refresh and libc.mincore(ctypes.c_void_p(address), ctypes.c_size_t(size), bitmap):
@@ -72,6 +73,8 @@ def worker(db, mode, binary):
                     bitmap[page] = 1  # The just-read page was resident at access.
                     now = time.perf_counter_ns()
                     profile['residency'] += now - t
+                    if mode == "observation-only":
+                        continue
                     if inline:
                         struct.pack_into("=QII", observation, 0, time.monotonic_ns(), page, 0)
                         scoring = lib.pmt_profile_step(policy, observation, bitmap, advice)
@@ -90,6 +93,9 @@ def worker(db, mode, binary):
                         profile["inline_path" if inline else "pipe_path"] += replied - now - scoring
                     assert fetch == 0xffffffff
                     if victim != 0xffffffff:
+                        eviction_advice += 1
+                        if mode == "scoring-only":
+                            continue
                         backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), victim * PAGE, PAGE)
                         if mode != "detector-full":
                             bitmap[victim] = 0  # Provisional until the next scan or touch.
@@ -132,7 +138,7 @@ def worker(db, mode, binary):
             raise RuntimeError("controller failed")
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
-                          profile_ns=profile, reads=reads, pageout_requests=evictions, checksum=checksum)))
+                          profile_ns=profile, reads=reads, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
 
 
 def run(db, mode, limit, binary=None):
@@ -151,7 +157,7 @@ def run(db, mode, limit, binary=None):
         group.rmdir()
 
 
-def main(output, baseline):
+def main(output, baseline, stages):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -168,6 +174,9 @@ def main(output, baseline):
         before, after = ("detector-before", "detector-inline") if baseline else ("detector-full", "detector")
         orders = (("stock", before, after), (after, before, "stock"),
                   (before, "stock", after), (after, "stock", before))
+        if stages:
+            modes = ("stock", "observation-only", "scoring-only", "detector-inline")
+            orders = [tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4)]
         for pair, order in enumerate(orders):
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
@@ -180,7 +189,8 @@ def main(output, baseline):
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
                              profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
-                                 for label, path in ([("before", baseline), ("after", ROOT / "libpmt-profile.so")]
+                                 for label, path in ([("inline", ROOT / "libpmt-profile.so")] if stages else
+                                                     [("before", baseline), ("after", ROOT / "libpmt-profile.so")]
                                                      if baseline else [])},
                              calibration=control, memory_max_bytes=limit, runs=runs, median=summary),
                              indent=2) + "\n")
@@ -193,6 +203,8 @@ if __name__ == "__main__":
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
-        parser.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
+        group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline)
+        main(args.output, args.profile_baseline, args.stages)
