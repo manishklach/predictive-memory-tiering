@@ -234,3 +234,20 @@ On November 26, 2026, the Ubuntu 24.04 amd64 package indexes selected the follow
 | linux-headers-generic-hwe-24.04 | 7.0.0-44.44~24.04.1 | d302f2fbed84b78593043047d7b736aa54aa4f53eeca1463b22e45bf7927cf88 |
 
 To repeat the check, refresh Noble's package indexes, resolve each metapackage with `apt-cache depends`, download its versioned amd64 header package with `apt-get download`, and extract it with `dpkg-deb -x`. Inspect the configuration under `usr/src/linux-headers-<release>-generic/.config`, including commented-out symbols. A future candidate with DAMON, VADDR and SYSFS enabled still needs a boot test, a PID-scoped DAMOS page-out exercise and fresh same-kernel baselines.
+
+### Sydney T0 with a DAMON-enabled Ubuntu AWS kernel
+
+The custom `7.0.14-pmt-damon` kernel booted on both Sydney test hosts using AMI `ami-048c1a9eb63a67eed`. It was built in WSL2 from Ubuntu AWS source `7.0.0-1018.19~24.04.1`, with a two-line fix for an undeclared region-size parameter. The config delta includes changes to debugging, BTF-dependent features and trusted keys. Both hosts used Secure Boot disabled and retained the original AWS kernel as their normal GRUB fallback. [Build procedure](docs/BUILD.md#building-the-damon-capable-aws-test-kernel) · [Config delta](results/sydney-damon/config.diff) · [Package hashes](results/sydney-damon/packages.json)
+
+The PID-scoped DAMOS probe applied page-out to 135,168 bytes on each host. The target process showed 76 KiB in swap on `c7i-flex.large` and 80 KiB on `c7i.2xlarge`, then read back the contents of its 32 MiB mapping successfully. Scheme counters measure bytes processed by DAMOS; process swap measures pages actually swapped at observation time. An initial probe configured an empty age range. Setting the upper bound explicitly made the scheme eligible to run. Both hosts passed the 100-cycle PMT synthetic module smoke test with zero trace drops. [Compatibility probe](results/sydney-damon/compat/damos.json) · [Formal probe](results/sydney-damon/formal/damos.json) · [Host configuration](results/sydney-damon/formal/host.json)
+
+The formal host repeated the same EBS fio jobs. Direct queue-depth-one 4 KiB random reads measured 1,288 IOPS with 1.38 ms p99 completion latency. The short 256 MiB sequential write measured 244 MiB/s. These are single file-based measurements; the experiment did not benchmark ENA network throughput. [fio read](results/sydney-damon/formal/fio-read.json) · [fio write](results/sydney-damon/formal/fio-write.json)
+
+| SQLite mode on the custom kernel | Median query p99 (ms) | Median queries/s |
+| --- | ---: | ---: |
+| Stock reclaim | 1.475 | 4,554 |
+| PMT score every 64 | 1.555 | 4,161 |
+| PMT score every 128 | 1.589 | 4,092 |
+| PMT score every 256 | 1.647 | 4,017 |
+
+DAMOS was off during these SQLite timings. All 48 runs passed query checks, used swap, and recorded zero OOM kills at the recalibrated 19,398,656-byte memory cap. PMT at 256/256 delivered 88.2% of stock throughput with 11.7% higher median p99. It beat stock p99 in four of twelve matched rounds and throughput in one. The earlier AWS-kernel median latency advantage did not repeat. The functional DAMOS probe establishes that this kernel can run a PID-scoped scheme; a timed SQLite DAMOS comparison and an instance-store NVMe campaign remain separate experiments. [Raw runs](results/sydney-damon/formal/sqlite.json)

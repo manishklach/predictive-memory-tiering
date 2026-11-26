@@ -1,0 +1,4 @@
+synthetic_emitted 9
+trace_drops 0
+self_disables 3
+PMT synthetic module smoke test passed (100 load/unload cycles)

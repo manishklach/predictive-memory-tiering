@@ -1,0 +1,16 @@
+{
+  "kernel": "7.0.14-pmt-damon",
+  "operations": "vaddr",
+  "action": "pageout",
+  "mapping_bytes": 33554432,
+  "sample_us": 5000,
+  "aggregate_us": 100000,
+  "stats": {
+    "nr_tried": 1,
+    "sz_tried": 135168,
+    "nr_applied": 1,
+    "sz_applied": 135168
+  },
+  "target_swap_kib": 76,
+  "contents_verified": true
+}

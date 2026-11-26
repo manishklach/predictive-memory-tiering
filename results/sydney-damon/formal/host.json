@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "tier": "development",
+  "os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo",
+  "kernel": "7.0.14-pmt-damon",
+  "architecture": "x86_64",
+  "page_bytes": 4096,
+  "config_source": "/boot/config-7.0.14-pmt-damon",
+  "features": {
+    "CONFIG_DAMON": "y",
+    "CONFIG_DAMON_VADDR": "y",
+    "CONFIG_DAMON_SYSFS": "y",
+    "CONFIG_IDLE_PAGE_TRACKING": "y",
+    "CONFIG_LRU_GEN": "y",
+    "CONFIG_SWAP": "y",
+    "CONFIG_TRANSPARENT_HUGEPAGE": "y",
+    "CONFIG_DEBUG_FS": "y",
+    "CONFIG_ZSWAP": "y"
+  },
+  "matching_headers": true,
+  "cgroup_controllers": [
+    "cpuset",
+    "cpu",
+    "io",
+    "memory",
+    "hugetlb",
+    "pids",
+    "rdma",
+    "misc",
+    "dmem"
+  ],
+  "thp": "always [madvise] never",
+  "mglru": "0x0007",
+  "zswap": "N",
+  "crash_kernel_loaded": "1",
+  "kernel_taint": "8192",
+  "secure_boot": "disabled",
+  "active_swap": [
+    {
+      "source": "/var/tmp/t0-swap",
+      "type": "file",
+      "size_kib": 524284,
+      "used_kib": 0,
+      "priority": -1,
+      "nvme_model": null
+    }
+  ],
+  "blockers": []
+}
