@@ -48,7 +48,11 @@ def worker(db, mode, binary, interval, score_interval, seed):
     score_calls = history_only_calls = 0
     ctl = None
     inline = mode in ("scoring-only", "detector-inline")
-    observe = mode not in ("stock", "damos", "live", "live-score")
+    bounded = None
+    if mode == "bounded-on":
+        from bounded_eviction import BoundedEviction
+        bounded = BoundedEviction(backing, address, libc)
+    observe = mode not in ("stock", "damos", "live", "live-score", "bounded-off", "bounded-on")
     if inline:
         lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
         ptr = ctypes.c_void_p
@@ -75,6 +79,8 @@ def worker(db, mode, binary, interval, score_interval, seed):
         def xRead(self, amount, offset):
             nonlocal score_calls, history_only_calls
             nonlocal reads, evictions, eviction_advice, refreshes
+            if bounded:
+                bounded.on_read(offset, amount)
             data = backing[offset:offset + amount]
             for page in range(offset // PAGE, (offset + amount + PAGE - 1) // PAGE):
                 reads += 1
@@ -140,10 +146,13 @@ def worker(db, mode, binary, interval, score_interval, seed):
     for stage in profile:
         profile[stage] = 0
     stats = None
-    detector = RegionDetector() if mode == "live-score" else None
+    detector = RegionDetector() if mode in ("live-score", "bounded-off", "bounded-on") else None
     context = nullcontext()
     if mode == "damos":
         context = pageout(os.getpid(), address, size)
+    elif mode in ("bounded-off", "bounded-on"):
+        ranges = [(address, address + size)]
+        context = sampling(os.getpid(), ranges, detector, buffer_kb=32)
     elif mode in ("live", "live-score"):
         context = sampling(os.getpid(), detector=detector, buffer_kb=32)
     fault_probe = None
@@ -155,8 +164,14 @@ def worker(db, mode, binary, interval, score_interval, seed):
             fault_start = fault_probe.snapshot()
         usage = resource.getrusage(resource.RUSAGE_SELF)
         start = time.perf_counter_ns()
+        consumed = 0
         for key in keys:
             t = time.perf_counter_ns()
+            if bounded and consumed < len(detector.decisions):
+                consumed = len(detector.decisions)
+                region = detector.decisions[consumed - 1][1]
+                if region:
+                    bounded.apply(region)
             row = conn.execute("select id,length(payload) from items where id=?", (key,)).fetchone()
             times.append(time.perf_counter_ns() - t)
             if row != (key, 1500):
@@ -171,6 +186,10 @@ def worker(db, mode, binary, interval, score_interval, seed):
             scored = [choice for stamp, choice in detector.decisions if start <= stamp <= start + elapsed]
         if mode == "damos":
             stats = scheme_stats(*monitor)
+    if os.environ.get("PMT_BOUNDED_TRIAL") == "1":
+        digest = hashlib.sha256(backing).hexdigest()
+        if digest != os.environ["PMT_DB_SHA256"]:
+            raise ValueError("database mapping changed")
     conn.close()
     vfs.unregister()
     if inline:
@@ -190,7 +209,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
                           live_scored_epochs=len(scored) if detector else None,
                           live_candidate_epochs=sum(c is not None for c in scored) if detector else None,
                           live_region_records=len(monitor) if mode == "live" else None, damos_stats=stats, inline_score_calls=score_calls, history_only_calls=history_only_calls,
-                          profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
+                          profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, bounded_eviction=bounded.stats if bounded else None, pageout_requests=bounded.stats["requests"] if bounded else evictions, checksum=checksum)))
 
 
 def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345):
@@ -211,15 +230,25 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
         setup.execute("pragma page_size=4096")
         setup.execute("create table items(id integer primary key, payload blob)")
-        setup.executemany("insert into items values (?,zeroblob(1500))", ((i,) for i in range(ROWS)))
+        if bounded_trial:
+            if Path("/sys/module/zswap/parameters/enabled").read_text().strip() != "N":
+                raise RuntimeError("bounded trial requires zswap off")
+            rng = random.Random(8471)
+            setup.executemany("insert into items values (?,?)",
+                              ((i, struct.pack("<Q", i) + rng.randbytes(1492)) for i in range(ROWS)))
+        else:
+            setup.executemany("insert into items values (?,zeroblob(1500))", ((i,) for i in range(ROWS)))
         setup.commit()
         setup.close()
+        if bounded_trial:
+            os.environ["PMT_BOUNDED_TRIAL"] = "1"
+            os.environ["PMT_DB_SHA256"] = hashlib.sha256(db.read_bytes()).hexdigest()
         control = run(db, "stock", None)
         if control["swap_peak_bytes"]:
             raise ValueError("calibration swapped")
@@ -268,8 +297,11 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         if live_profile:
             orders = list(permutations(("stock", "live", "live-score"))) * 2
             random.Random(1207).shuffle(orders)
+        if bounded_trial:
+            orders = list(permutations(("stock", "bounded-off", "bounded-on"))) * 2
+            random.Random(1207).shuffle(orders)
         for pair, order in enumerate(orders):
-            seed = 12345 + pair if extended or damos or live or live_score or live_profile else 12345
+            seed = 12345 + pair if extended or damos or live or live_score or live_profile or bounded_trial else 12345
             expected_checksum = control["checksum"] if seed == 12345 else None
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
@@ -311,6 +343,7 @@ if __name__ == "__main__":
         parser.add_argument("output", type=Path)
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--bounded-trial", action="store_true", help="compare stock and live scoring with bounded page-out off/on")
         group.add_argument("--live-profile", action="store_true", help="profile stock, live sampling and live scoring across twelve matched seeds")
         group.add_argument("--live-score", action="store_true", help="rank live region samples during SQLite queries")
         group.add_argument("--live", action="store_true", help="time stock and PID-scoped observation over twelve matched seeds")
@@ -321,4 +354,4 @@ if __name__ == "__main__":
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial)
