@@ -2,6 +2,8 @@
 
 **Can a memory-bound Linux workload use half its usual DRAM and still keep tail latency under control?** PMT is an experimental Linux kernel and userspace project that studies this question using local NVMe swap on AWS EC2.
 
+On SQLite, all three selectors reached the 96 KiB reclaim target on all 12 seeds. The cost-aware selector recorded less swap-fault stall than filtered LRU on six of them. On Redis, it reached the target on 12/12 seeds, compared with 11/12 for filtered LRU and 10/12 for idle-only. [Read the technical blog: What does it cost to reclaim 96 KiB?](docs/PAGE-RECLAIM-BENCHMARKS.md)
+
 When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it when the workload faults. A workload with predictable reuse may tolerate a smaller DRAM tier if software can identify pages that will stay cold and fetch swapped pages before their next access. The vision is to make the DRAM budget a tunable resource for workloads with that access pattern, while preserving the stock Linux fault path.
 
 ## How it works
