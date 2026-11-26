@@ -673,3 +673,17 @@ Bytes and sleeping time are summed across 12 matched seeds per arm. The checkpoi
 The page mix matters. Before advice 370 of 768 LRU pages already had swapped PTEs, versus 41 of 752 idle-only pages. Restricting sleep attribution to pages with present PTEs before advice gives 44.203 ms for LRU and 77.601 ms for idle-only. Total tagged-page sleep includes later faults on pages already swapped and can include repeated faults on the same page. It measures query-thread time off CPU following a sleeping switch-out inside the fault handler, including wake-to-run latency. These totals establish neither the incremental stall caused by advice nor a latency win at matched reclaimed bytes.
 
 [Per-seed metrics](results/sydney-nvme-pilot/swap-fault-attribution/summary.json) � [All 48 runs with per-page records](results/sydney-nvme-pilot/swap-fault-attribution/trial.json.gz) � [Repeated positive control](results/sydney-nvme-pilot/swap-fault-attribution/validation-repeat.json)
+
+### Does filtering already-swapped pages explain the reclaim gain?
+
+In a fresh five-arm Sydney NVMe campaign, filtered LRU recovered 95.6% of the idle-only model's 10 ms byte gain over plain LRU. At 100 ms filtered LRU and idle-only had exactly the same pooled reclaim estimate. Each arm ran the same 12 seeds at 60,000 queries per seed, the paired half-memory limit, a 100 ms recent-read guard and the existing advice caps. Both probe controls passed before collection.
+
+| Traced selector | Advised pages | Newly nonresident bytes at 10 ms | At 100 ms | Tagged-page sleep | Median seed p99 | Median seed throughput |
+|---|---:|---:|---:|---:|---:|---:|
+| Plain LRU | 768 | 1,122,304 | 929,792 | 80.90 ms | 108.02 µs | 33,513 q/s |
+| Filtered LRU | 752 | 2,551,808 | 2,093,056 | 80.41 ms | 107.63 µs | 33,588 q/s |
+| Idle-only | 736 | 2,617,344 | 2,093,056 | 82.48 ms | 108.09 µs | 33,888 q/s |
+
+Filtered LRU skipped 666 already-swapped candidate encounters and advised 752 present pages. Idle-only advised 670 present pages and plain LRU advised 317. At 10 ms idle-only reclaimed 16 more pages than filtered LRU across all seeds, with seven seed wins, one tie and four losses. Per advice request the observed 10 ms yield was 3,556 bytes for idle-only, 3,393 for filtered LRU and 1,461 for plain LRU. The filter explains most of the measured advantage over plain LRU on this fixture. The remaining difference and the overlapping performance results do not establish a general learned-ranking advantage. Advice caps were equal; reclaimed bytes were not controlled. Tagged-page sleep includes faults on any selected page after advice.
+
+The two tracer-off control arms, repeated validations and full page records are included. Reproduce the five-arm schedule with `--filtered-fault-trial` in the fault-attribution harness. [Per-seed metrics](results/sydney-nvme-pilot/filtered-fault-attribution/summary.json) · [All 60 runs](results/sydney-nvme-pilot/filtered-fault-attribution/trial.json.gz)
