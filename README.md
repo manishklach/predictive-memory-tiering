@@ -253,3 +253,21 @@ The formal host repeated the same EBS fio jobs. Direct queue-depth-one 4 KiB ran
 DAMOS was off during these SQLite timings. All 48 runs passed query checks, used swap, and recorded zero OOM kills at the recalibrated 19,398,656-byte memory cap. PMT at 256/256 delivered 88.2% of stock throughput with 11.7% higher median p99. It beat stock p99 in four of twelve matched rounds and throughput in one. The earlier AWS-kernel median latency advantage did not repeat. The functional DAMOS probe establishes that this kernel can run a PID-scoped scheme; a timed SQLite DAMOS comparison and an instance-store NVMe campaign remain separate experiments. [Raw runs](results/sydney-damon/formal/sqlite.json)
 
 The recovery drill booted the formal host from a disposable snapshot clone, checked the SQLite results against their pre-snapshot SHA-256, and booted the custom kernel on that clone. A deliberate panic produced a 289,984,155-byte dump. Reassembly recovered the custom kernel release and sysrq panic message. The guest returned to the original AWS fallback kernel with kdump rearmed. [Recovery manifest](results/sydney-damon/formal/recovery.json)
+
+### Timed DAMOS baseline on the Sydney c7i.2xlarge
+
+Stock Linux had the highest median throughput. PMT 256/256 had the lowest query p99 in every matched round. DAMOS fell between them on both median metrics. All three ran on the same custom kernel (`7.0.14-pmt-damon`) and gp3-backed swap.
+
+| Mode | Median query p99 (ms) | Median queries/s | Rounds with lower p99 than stock | Rounds with higher throughput than stock |
+| --- | ---: | ---: | ---: | ---: |
+| Stock Linux | 1.576 | 4,415 | — | — |
+| DAMOS PID-scoped page-out | 1.514 | 4,313 | 7/12 | 5/12 |
+| PMT 256/256 | 1.321 | 3,579 | 12/12 | 1/12 |
+
+DAMOS delivered 97.7% of stock throughput with 3.9% lower median p99. Compared with PMT, DAMOS had 20.5% higher throughput and 14.6% higher p99. The PMT latency ranking changed from the preceding custom-kernel experiment. These results describe the 36 runs in this comparison.
+
+Each mode occupied each run position four times. Each round used the same 3,000 queries in all three modes, with seeds 12345–12356 across rounds. Each run had a fresh cgroup capped at 19,529,728 bytes, half the 39,059,456-byte stock calibration peak. All queries passed result checks, all runs used swap, and all recorded zero OOM kills.
+
+DAMOS monitored the SQLite worker's anonymous database mapping with virtual-address sampling every 5 ms and aggregation every 100 ms. The page-out scheme selected regions with zero sampled accesses and age of at least two aggregation intervals. Scheme setup, counter collection, and teardown were outside query timing. At the end of the timed loop the kernel reported attempted actions in all 12 DAMOS runs and nonzero applied bytes in nine. Median cumulative applied bytes were 7,372,800 per run; these counters can include repeated actions on a region. A run with zero applied bytes still contributes to the comparison. [Calibration, per-run timings and counters](results/sydney-damon/formal/sqlite-timed-damos.json)
+
+To reproduce on the dedicated host with the custom kernel, EBS swap active, and an unused DAMON admin interface, run `make pmtd libpmt-profile.so`, then `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-timed-damos.json --damos`.
