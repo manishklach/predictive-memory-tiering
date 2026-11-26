@@ -18,6 +18,7 @@ class BoundedEviction:
             raise ValueError('LRU selection requires read history')
         self.lru = lru
         self.followup = None
+        self.capture = None
         self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
@@ -56,6 +57,9 @@ class BoundedEviction:
                     yield i
 
         eligible = eligible_pages()
+        if self.capture:
+            eligible = list(eligible)
+            self.capture.epoch(self, eligible, budget)
         if self.skip_swapped:
             # Walk beyond the top K to refill slots rejected by the last-moment PTE check.
             victims = sorted(eligible, key=self.last_read.__getitem__)
@@ -88,6 +92,8 @@ class BoundedEviction:
 
     def on_read(self, offset, amount):
         now = time.monotonic_ns() if self.last_read is not None else None
+        if self.capture:
+            self.capture.read(offset, amount, now)
         for i in range(offset // mmap.PAGESIZE, (offset + amount - 1) // mmap.PAGESIZE + 1):
             if self.last_read is not None:
                 self.last_read[i] = now

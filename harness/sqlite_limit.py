@@ -55,6 +55,11 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         bounded = BoundedEviction(backing, address, libc, protect_recent=mode != "bounded-legacy",
                                   guard_ns=300_000_000 if mode == "bounded-300ms" else 100_000_000, lru=mode in ("bounded-lru", "bounded-noswap"),
                                   skip_swapped=mode == "bounded-noswap")
+    capture = None
+    if mode == 'bounded-on' and os.environ.get('PMT_CANDIDATE_DIR'):
+        from candidate_capture import CandidateCapture
+        capture = CandidateCapture(Path(os.environ['PMT_CANDIDATE_DIR']), seed)
+        bounded.capture = capture
     followup = None
     if bounded and os.environ.get("PMT_RESIDENCY_FOLLOWUP") == "1":
         from residency_followup import ResidencyFollowup
@@ -177,6 +182,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         start = time.perf_counter_ns()
         consumed = 0
         for key in keys:
+            if capture:
+                capture.query += 1
             t = time.perf_counter_ns()
             if followup:
                 followup.poll(t)
@@ -193,6 +200,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         elapsed = time.perf_counter_ns() - start
         if bounded:
             bounded.finish(start + elapsed)
+        if capture:
+            capture.close()
         if followup:
             followup.close()
         used = resource.getrusage(resource.RUSAGE_SELF)
