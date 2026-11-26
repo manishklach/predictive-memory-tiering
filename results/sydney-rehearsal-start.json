@@ -1,0 +1,13 @@
+{
+  "milestone": "Sydney recovery rehearsal startup",
+  "observed_utc": "2026-11-26T11:34:20Z",
+  "region": "ap-southeast-2",
+  "host_type": "c7i-flex.large",
+  "starting_credit_usd": 100.0,
+  "latest_reported_credit_usd": 100.0,
+  "snapshot_source_state": "stopped",
+  "snapshot_state_at_start": "pending",
+  "serial_console_initially_enabled": false,
+  "serial_console_enabled_verified": true,
+  "instance_state_after_start_request": "pending"
+}
