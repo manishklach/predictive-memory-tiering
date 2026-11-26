@@ -41,6 +41,29 @@ class Predictor:
         return risk
 
 
+def prepare_folds(source, directory):
+    with gzip.open(source, "rt") as stream:
+        epochs = [json.loads(line) for line in stream]
+    seeds = set(range(12345, 12357))
+    if {e["seed"] for e in epochs} != seeds:
+        raise ValueError("unexpected training seeds")
+    for seed in seeds:
+        model = Predictor()
+        for epoch in epochs:
+            if epoch["seed"] != seed:
+                model.train(epoch)
+        rows = [[key, n, model.positives[key]] for key, n in model.samples.items()]
+        (directory / f"model-{seed}.json").write_text(json.dumps(rows))
+
+
+def load_fold(directory, seed):
+    model = Predictor()
+    for key, n, positives in json.loads((directory / f"model-{seed}.json").read_text()):
+        model.samples[tuple(key)] = n
+        model.positives[tuple(key)] = positives
+    return model
+
+
 def evaluate(directory):
     source = directory / "candidates.jsonl.gz"
     with gzip.open(source, "rt") as stream:

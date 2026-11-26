@@ -19,6 +19,7 @@ class BoundedEviction:
         self.lru = lru
         self.followup = None
         self.capture = None
+        self.predictor = None
         self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
@@ -60,7 +61,16 @@ class BoundedEviction:
         if self.capture:
             eligible = list(eligible)
             self.capture.epoch(self, eligible, budget)
-        if self.skip_swapped:
+        if self.predictor:
+            from residency_followup import pagemap_state
+            epoch = {"ns": time.monotonic_ns()}
+            with open("/proc/self/pagemap", "rb") as pagemap:
+                def risk(i):
+                    row = dict(page=i, last_read_ns=self.last_read[i],
+                               pte=pagemap_state(pagemap.fileno(), self.address, i))
+                    return self.predictor.score(epoch, row), i
+                victims = nsmallest(budget, eligible, key=risk)
+        elif self.skip_swapped:
             # Walk beyond the top K to refill slots rejected by the last-moment PTE check.
             victims = sorted(eligible, key=self.last_read.__getitem__)
         elif self.lru:
