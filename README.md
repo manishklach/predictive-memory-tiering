@@ -396,3 +396,13 @@ Both scored arms monitored only the worker's private SQLite backing mapping usin
 Across the 12 enabled runs, 656 of 714 advised pages appeared nonresident immediately after advice. SQLite read 317 advised pages again within 100 ms, and 310 were nonresident immediately before that read. The counts cover first reuse during the query loop and have a shorter observation window for late advice. Acting on the score improved median p99 by another 1.6% relative to scoring alone, but cost 11.4% of its throughput. The early reuse makes region-to-page selection a concrete issue to address before another launch decision.
 
 Reproduce on the pinned T0 kernel with swap active and zswap off using `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --bounded-trial`. [Raw per-seed timings and eviction counters](results/sydney-damon/formal/bounded-pageout.json)
+
+### Recent-read guard for bounded eviction
+
+The cooperative SQLite selector now skips a resident page if the VFS read it during the preceding 100 ms. It records every page touched by a cross-page read. The detector still chooses the cold region. Each decision can advise at most 16 pages, and each worker can advise at most 64 distinct pages. A regression test verifies protection at the exact 100 ms boundary, expiry, and reuse counts when a query loop ends early.
+
+The selection trial compares stock Linux, scoring alone, the original ascending-address selector and the guarded selector. Each arm runs in each position three times across seeds 12345–12356. The report counts first reuse within 100 ms for all advised pages and separately for pages with a full 100 ms left in the timed query loop.
+
+The Sydney T0 attempt on November 26, 2026 used the previous 19,660,800-byte cap and zswap-off configuration. The instance stopped before the operator received a result. An AWS Organizations service control policy denied the restart. Guarded early reuse, p99 and throughput remain unverified. The previous 317/714 early reuses apply to the original selector.
+
+To reproduce on the pinned T0 guest with swap active and zswap off, build with `make test libpmt-profile.so` and run `sudo /usr/bin/python3 harness/sqlite_limit.py selection.json --selection-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Page selector](harness/bounded_eviction.py) · [Previous T0 result](results/sydney-damon/formal/bounded-pageout.json)
