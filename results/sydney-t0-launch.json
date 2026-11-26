@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-26",
+  "region": "ap-southeast-2",
+  "instance_type": "c7i.2xlarge",
+  "ami": "ami-048c1a9eb63a67eed",
+  "planned_residency_interval": 256,
+  "planned_scoring_interval": 256,
+  "offered_zones": ["ap-southeast-2a", "ap-southeast-2b", "ap-southeast-2c"],
+  "free_tier_eligible": false,
+  "account_plan": "FREE",
+  "dry_run": "DryRunOperation",
+  "launch_error": "InvalidParameterCombination",
+  "launch_message": "The specified instance type is not eligible for Free Tier.",
+  "rehearsal_executed": false
+}

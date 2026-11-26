@@ -204,3 +204,7 @@ Stock Linux led on both median metrics. Scoring every 256 observations gave the 
 Each WSL2 round used one query seed shared across all four modes (seeds 12345–12356), with 3,000 queries per run. Each mode occupied each run position three times. All 48 runs used fresh cgroups capped at 19,406,848 bytes, half the calibrated stock peak rounded down to a page. The detector refreshed residency every 256 observations, maintained touch history on every observation, and could issue page-out advice only on a scoring pass. All runs passed query checks, used swap, and recorded zero OOM kills. [Per-run timings, seeds, and scoring counters](results/sqlite-scoring-extended-50.json)
 
 Reproduce with `make pmtd libpmt-profile.so` followed by `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-scoring-extended.json --extended-scoring`.
+
+### Formal Sydney T0 launch attempt
+
+EC2 listed the designated `c7i.2xlarge` in three Sydney availability zones. The permission dry run succeeded, but the actual launch returned `InvalidParameterCombination` because the instance type is ineligible on the active Free account plan. The planned 256/256 rehearsal therefore produced no guest measurements. The earlier Sydney recovery evidence applies to the smaller compatibility host. [Launch record](results/sydney-t0-launch.json)
