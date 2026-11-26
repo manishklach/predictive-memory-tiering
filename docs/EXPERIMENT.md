@@ -38,3 +38,23 @@ The screen splits by event index, fits on the first half and scores the second. 
 The next pilot capture needs eligible page IDs at each real decision, their pre-advice residency and read history, and timestamped subsequent reads with query IDs. Those records allow matched-volume oracle and held-out seed comparisons on actual candidate sets before a timed policy trial.
 
 Reproduce with `python traces/page_headroom.py results/sqlite-long.csv results/sqlite-page-headroom.json`.
+
+#### Reproducing the matched-byte comparison
+
+On the pinned x86-64 pilot guest, provision the same exclusive NVMe swap, disable zswap, enable the memory cgroup controller and build `libpmt-profile.so`. Build and load the diagnostic module from `kernel/swapfault` and enable `kernel.task_delayacct` before starting new workers. Run the swap-fault validation twice. The SQLite entry point is:
+
+```sh
+python3 harness/sqlite_limit.py sqlite.json --requests 60000 --cost-trial \
+  --paired-calibration results/sydney-damon/formal/bounded-pageout.json
+```
+
+For the Redis pilot, use Redis 7.0.15, its matching `redismodule.h` (SHA-256 `dcc23952d82cd8f06e4fe6ee32de0b04d437cfe03779963230b3f0dde2c731e0`), the Ubuntu Python 3.12 development headers and `redis-cli`. In the following commands `REDIS_INCLUDE` is the header directory and `REDIS_SERVER` is the absolute executable path.
+
+```sh
+cc -shared -fPIC -O2 -I"$REDIS_INCLUDE" $(python3-config --includes) \
+  -DPMT_LIBPYTHON='"libpython3.12.so.1.0"' harness/redis_cost/redis_bridge.c \
+  -o /var/tmp/pmt-redis-bridge.so $(python3-config --embed --ldflags)
+python3 harness/redis_cost/run.py "$REDIS_SERVER" /var/tmp/pmt-redis-bridge.so redis.json
+```
+
+The Redis harness opens one disposable Unix-socket-only server per arm. It estimates the memory cap from half an unconstrained server's peak cgroup memory rounded down to a page. The timed loop executes native GETRANGE calls on a 32 MiB string, alternating uniformly random pages and a 64-page hot set. It checks every reply. The embedded benchmark driver and sampler share the server's cgroup; the reported latency is server-side and excludes network time. Redis uses the frozen SQLite training tables. Both drivers run as root on the isolated guest for DAMON, cgroups and the diagnostic device. Unload the module and restore delay accounting after the trial.

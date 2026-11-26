@@ -687,3 +687,33 @@ In a fresh five-arm Sydney NVMe campaign, filtered LRU recovered 95.6% of the id
 Filtered LRU skipped 666 already-swapped candidate encounters and advised 752 present pages. Idle-only advised 670 present pages and plain LRU advised 317. At 10 ms idle-only reclaimed 16 more pages than filtered LRU across all seeds, with seven seed wins, one tie and four losses. Per advice request the observed 10 ms yield was 3,556 bytes for idle-only, 3,393 for filtered LRU and 1,461 for plain LRU. The filter explains most of the measured advantage over plain LRU on this fixture. The remaining difference and the overlapping performance results do not establish a general learned-ranking advantage. Advice caps were equal; reclaimed bytes were not controlled. Tagged-page sleep includes faults on any selected page after advice.
 
 The two tracer-off control arms, repeated validations and full page records are included. Reproduce the five-arm schedule with `--filtered-fault-trial` in the fault-attribution harness. [Per-seed metrics](results/sydney-nvme-pilot/filtered-fault-attribution/summary.json) · [All 60 runs](results/sydney-nvme-pilot/filtered-fault-attribution/trial.json.gz)
+
+### Equal-byte test of a cost-aware selector
+
+The cost-aware selector estimates query-thread sleeping time per page made nonresident at 10 ms. It ranks eligible present pages in a DAMON cold region by this estimated cost, lowest first, with address order for ties. For each idle-age bucket the numerator is the sum of all subsequent tagged-page sleep, including zero for pages without stalls; the denominator is the count of successful 10 ms reclaim observations. Both quantities shrink toward the training-population mean with weight 32. This estimates expected sleep divided by expected bytes freed (the page size is constant). The cost is empirical sleep associated with advice. Incremental stall caused by advice and device write amplification were not measured. No wear coefficient was fitted.
+
+All models were frozen using only the earlier SQLite captures and attribution campaigns (seeds 12345–12356). Each evaluation used fresh seeds 22345–22356, all six arm orders twice, 60,000 operations per seed, a 100 ms recent-read guard and the same target of 24 confirmed 4 KiB pages per run. A pending 10 ms observation reserves one target slot; an unsuccessful observation releases the slot for another candidate. The target measures cumulative present-to-nonresident transitions at each page's checkpoint, not simultaneous free memory or sustained RSS reduction. The existing 64-advice safety bound still applies, and target attainment is reported per seed.
+
+On the Sydney NVMe SQLite workload all three policies met the 98,304-byte target on every seed under the original 19,660,800-byte cap. Sleeping time sums all 12 runs; performance entries are medians across seeds.
+
+| SQLite selector | Advice requests | Tagged-page sleep | Median seed p99 | Median throughput |
+|---|---:|---:|---:|---:|
+| Filtered LRU | 309 | 37.45 ms | 100.19 µs | 33,470 q/s |
+| Idle-only | 352 | 39.09 ms | 100.95 µs | 33,839 q/s |
+| Cost-aware | 296 | 36.98 ms | 100.95 µs | 33,692 q/s |
+
+The cost-aware selector had lower sleep on six of 12 seeds against each baseline. The 1.25% pooled reduction versus filtered LRU did not translate into a consistent paired advantage. The probe attributes sleep inside faults on tagged pages, including time until the thread runs again. The trial compares selectors at equal confirmed reclaim and does not isolate a causal cost per advice request.
+
+[SQLite per-seed results](results/sydney-nvme-pilot/matched-cost/sqlite-summary.json) · [Raw SQLite records](results/sydney-nvme-pilot/matched-cost/sqlite.json.gz) · [Cost model](harness/reclaim_cost.py)
+
+The transfer test used Redis 7.0.15 under a separately calibrated 28,086,272-byte cap. The same frozen tables ranked pages from an actual Redis string during 60,000 server-side GETRANGE operations per seed. The benchmark uses one 32 MiB value and a hot/cold offset distribution. Throughput is server-side operation rate with the cooperative driver, not client network throughput.
+
+| Redis selector | Seeds reaching 96 KiB | Confirmed bytes, all seeds | Tagged sleep, all seeds | Median seed p99 | Median throughput |
+|---|---:|---:|---:|---:|---:|
+| Filtered LRU | 11/12 | 1,146,880 | 33.43 ms | 86.53 µs | 50,053 ops/s |
+| Idle-only | 10/12 | 1,163,264 | 26.64 ms | 86.49 µs | 53,165 ops/s |
+| Cost-aware | 12/12 | 1,179,648 | 28.36 ms | 86.37 µs | 50,957 ops/s |
+
+Nine Redis seeds reached the full target with every policy. Within those same nine seeds, confirmed bytes were identical and tagged sleep totaled 22.78 ms for filtered LRU, 19.99 ms for idle-only and 21.26 ms for cost-aware. Idle-only fell short on seeds 22348 and 22352; filtered LRU reached its 64-advice limit on seed 22356. All runs are retained. The fully matched subset is descriptive and excludes policy-dependent failures. The transfer result supports target attainment for the cost-aware selector on this fixture. It does not establish consistently lower stall than both baselines across workloads.
+
+[Redis per-seed results](results/sydney-nvme-pilot/matched-cost/redis-summary.json) · [Raw Redis records](results/sydney-nvme-pilot/matched-cost/redis.json.gz) · [Reproduction instructions](docs/EXPERIMENT.md#reproducing-the-matched-byte-comparison)

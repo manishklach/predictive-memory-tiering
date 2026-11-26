@@ -1,0 +1,364 @@
+{
+  "target_bytes": 98304,
+  "summary": {
+    "bounded-cost-faulttrace": {
+      "target_met": 12,
+      "confirmed_bytes": 1179648,
+      "advised": 296,
+      "slept_ms": 36.978978,
+      "present_before_slept_ms": 36.978978,
+      "p99_us": 100.9545,
+      "queries_per_s": 33691.65552678617
+    },
+    "bounded-idle-faulttrace": {
+      "target_met": 12,
+      "confirmed_bytes": 1179648,
+      "advised": 352,
+      "slept_ms": 39.093769,
+      "present_before_slept_ms": 37.873992,
+      "p99_us": 100.945,
+      "queries_per_s": 33839.422944749575
+    },
+    "bounded-noswap-faulttrace": {
+      "target_met": 12,
+      "confirmed_bytes": 1179648,
+      "advised": 309,
+      "slept_ms": 37.447388,
+      "present_before_slept_ms": 37.447388,
+      "p99_us": 100.19,
+      "queries_per_s": 33470.23590686666
+    }
+  },
+  "seeds": {
+    "bounded-cost-faulttrace": [
+      {
+        "seed": 22345,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3290585,
+        "present_before_slept_ns": 3290585,
+        "p99_us": 102.571,
+        "queries_per_s": 33860.98838162952
+      },
+      {
+        "seed": 22346,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 3467100,
+        "present_before_slept_ns": 3467100,
+        "p99_us": 101.824,
+        "queries_per_s": 30985.182427182623
+      },
+      {
+        "seed": 22347,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2544062,
+        "present_before_slept_ns": 2544062,
+        "p99_us": 104.144,
+        "queries_per_s": 33522.32267194281
+      },
+      {
+        "seed": 22348,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3641779,
+        "present_before_slept_ns": 3641779,
+        "p99_us": 97.26,
+        "queries_per_s": 33484.45567633136
+      },
+      {
+        "seed": 22349,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2613814,
+        "present_before_slept_ns": 2613814,
+        "p99_us": 101.022,
+        "queries_per_s": 36452.842965607044
+      },
+      {
+        "seed": 22350,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2941846,
+        "present_before_slept_ns": 2941846,
+        "p99_us": 98.855,
+        "queries_per_s": 35288.887522555444
+      },
+      {
+        "seed": 22351,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3051577,
+        "present_before_slept_ns": 3051577,
+        "p99_us": 96.657,
+        "queries_per_s": 35428.74464678975
+      },
+      {
+        "seed": 22352,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2952891,
+        "present_before_slept_ns": 2952891,
+        "p99_us": 100.887,
+        "queries_per_s": 33407.59671332767
+      },
+      {
+        "seed": 22353,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3180292,
+        "present_before_slept_ns": 3180292,
+        "p99_us": 97.689,
+        "queries_per_s": 33058.25303860167
+      },
+      {
+        "seed": 22354,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2554506,
+        "present_before_slept_ns": 2554506,
+        "p99_us": 101.691,
+        "queries_per_s": 35826.80360827813
+      },
+      {
+        "seed": 22355,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 3236643,
+        "present_before_slept_ns": 3236643,
+        "p99_us": 96.021,
+        "queries_per_s": 34622.0225026747
+      },
+      {
+        "seed": 22356,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3503883,
+        "present_before_slept_ns": 3503883,
+        "p99_us": 103.07,
+        "queries_per_s": 31706.159589549054
+      }
+    ],
+    "bounded-idle-faulttrace": [
+      {
+        "seed": 22345,
+        "confirmed_bytes": 98304,
+        "advised": 31,
+        "slept_ns": 3480941,
+        "present_before_slept_ns": 3480941,
+        "p99_us": 103.986,
+        "queries_per_s": 33790.462327869296
+      },
+      {
+        "seed": 22346,
+        "confirmed_bytes": 98304,
+        "advised": 30,
+        "slept_ns": 3146983,
+        "present_before_slept_ns": 3146983,
+        "p99_us": 100.571,
+        "queries_per_s": 32979.03169914351
+      },
+      {
+        "seed": 22347,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3480220,
+        "present_before_slept_ns": 3480220,
+        "p99_us": 103.506,
+        "queries_per_s": 35723.78315847243
+      },
+      {
+        "seed": 22348,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2711994,
+        "present_before_slept_ns": 2473923,
+        "p99_us": 99.179,
+        "queries_per_s": 35985.57039083086
+      },
+      {
+        "seed": 22349,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2649632,
+        "present_before_slept_ns": 2649632,
+        "p99_us": 103.92,
+        "queries_per_s": 33888.383561629846
+      },
+      {
+        "seed": 22350,
+        "confirmed_bytes": 98304,
+        "advised": 29,
+        "slept_ns": 3106122,
+        "present_before_slept_ns": 2828001,
+        "p99_us": 101.319,
+        "queries_per_s": 34517.78320033103
+      },
+      {
+        "seed": 22351,
+        "confirmed_bytes": 98304,
+        "advised": 62,
+        "slept_ns": 6325239,
+        "present_before_slept_ns": 5621654,
+        "p99_us": 100.293,
+        "queries_per_s": 33307.59037783994
+      },
+      {
+        "seed": 22352,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2672711,
+        "present_before_slept_ns": 2672711,
+        "p99_us": 98.013,
+        "queries_per_s": 33663.57695063639
+      },
+      {
+        "seed": 22353,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2814155,
+        "present_before_slept_ns": 2814155,
+        "p99_us": 95.488,
+        "queries_per_s": 38738.61408939549
+      },
+      {
+        "seed": 22354,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 3189601,
+        "present_before_slept_ns": 3189601,
+        "p99_us": 101.872,
+        "queries_per_s": 32214.04466491145
+      },
+      {
+        "seed": 22355,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2686346,
+        "present_before_slept_ns": 2686346,
+        "p99_us": 100.125,
+        "queries_per_s": 33028.82938052037
+      },
+      {
+        "seed": 22356,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2829825,
+        "present_before_slept_ns": 2829825,
+        "p99_us": 101.386,
+        "queries_per_s": 34360.04531283661
+      }
+    ],
+    "bounded-noswap-faulttrace": [
+      {
+        "seed": 22345,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2970378,
+        "present_before_slept_ns": 2970378,
+        "p99_us": 102.948,
+        "queries_per_s": 32404.842354103694
+      },
+      {
+        "seed": 22346,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3453580,
+        "present_before_slept_ns": 3453580,
+        "p99_us": 98.627,
+        "queries_per_s": 33656.24144805422
+      },
+      {
+        "seed": 22347,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2603207,
+        "present_before_slept_ns": 2603207,
+        "p99_us": 100.258,
+        "queries_per_s": 32770.390171518564
+      },
+      {
+        "seed": 22348,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 3820213,
+        "present_before_slept_ns": 3820213,
+        "p99_us": 98.311,
+        "queries_per_s": 31420.76717283426
+      },
+      {
+        "seed": 22349,
+        "confirmed_bytes": 98304,
+        "advised": 30,
+        "slept_ns": 3016745,
+        "present_before_slept_ns": 3016745,
+        "p99_us": 103.228,
+        "queries_per_s": 35391.99339285279
+      },
+      {
+        "seed": 22350,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2589752,
+        "present_before_slept_ns": 2589752,
+        "p99_us": 101.463,
+        "queries_per_s": 35820.104422016186
+      },
+      {
+        "seed": 22351,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 3073795,
+        "present_before_slept_ns": 3073795,
+        "p99_us": 100.414,
+        "queries_per_s": 34455.56856321542
+      },
+      {
+        "seed": 22352,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2880050,
+        "present_before_slept_ns": 2880050,
+        "p99_us": 96.804,
+        "queries_per_s": 32735.685328198593
+      },
+      {
+        "seed": 22353,
+        "confirmed_bytes": 98304,
+        "advised": 27,
+        "slept_ns": 2852571,
+        "present_before_slept_ns": 2852571,
+        "p99_us": 96.298,
+        "queries_per_s": 33284.230365679105
+      },
+      {
+        "seed": 22354,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 3678624,
+        "present_before_slept_ns": 3678624,
+        "p99_us": 100.513,
+        "queries_per_s": 32812.22779693587
+      },
+      {
+        "seed": 22355,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2767053,
+        "present_before_slept_ns": 2767053,
+        "p99_us": 100.122,
+        "queries_per_s": 35020.04437318615
+      },
+      {
+        "seed": 22356,
+        "confirmed_bytes": 98304,
+        "advised": 27,
+        "slept_ns": 3741420,
+        "present_before_slept_ns": 3741420,
+        "p99_us": 99.718,
+        "queries_per_s": 34320.1835561478
+      }
+    ]
+  }
+}
