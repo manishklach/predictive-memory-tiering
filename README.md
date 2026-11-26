@@ -627,3 +627,25 @@ In each of 12 folds, all captures for one SQLite seed were reserved for evaluati
 Across all trajectories the pooled predictor recorded 472 early reuses, versus 470 for the original predictor and 484 for LRU over 2,304 selections. The aggregate advantage over LRU comes entirely from the address-order trajectory. These are offline outcomes on the existing Sydney captures.
 
 Reproduce with `python harness/pooled_predictor_replay.py`. [Counts by trajectory and seed](results/sydney-nvme-pilot/selector-trajectories/pooled-predictor.json)
+
+### Which page features help on held-out SQLite seeds?
+
+Idle time alone gave the lowest total 100 ms early reuse (444/2,304, 19.27%, versus 484/2,304, 21.01% for LRU). It beat LRU on both captures from the live selectors but lost on the address-order capture. Each cell below counts reused pages per 768 selections. Smaller counts are better.
+
+| Features used to rank pages | Address-order capture | LRU capture | Predictor capture |
+|---|---:|---:|---:|
+| LRU baseline | 165 | 149 | 170 |
+| None (address tie-break) | 153 | 148 | 156 |
+| PTE state | 158 | 148 | 153 |
+| Idle time | 173 | 136 | 135 |
+| Page range | 158 | 154 | 161 |
+| PTE state + idle time | 179 | 136 | 139 |
+| PTE state + page range | 156 | 159 | 164 |
+| Idle time + page range | 134 | 154 | 172 |
+| All three | 134 | 153 | 185 |
+
+Adding the aligned 128-page range to idle time avoided 39 early reuses on the address-order capture but added 18 and 37 on the LRU and predictor captures. Adding PTE state to idle time alone added 6, 0 and 4 early reuses respectively. The idle-only model learns reuse risk per idle-time bucket, including a separate bucket for unseen pages. LRU sorts by exact last-read time. They need not select the same pages.
+
+Each fold held one of 12 seeds out across all three captures. All variants used the same training encounters, feature order, smoothing weight, address tie-break, candidate sets and decision budgets. Features removed from the model were omitted from its hierarchical frequency table. The full-model and LRU counts matched the earlier pooled replay for every seed and trajectory. The comparison is exploratory because model selection and reporting use the same 12 held-out folds. Live policy performance remains unmeasured for the idle-only variant.
+
+Reproduce with `python harness/feature_ablation.py`. [Per-seed ablation counts](results/sydney-nvme-pilot/selector-trajectories/feature-ablation.json)

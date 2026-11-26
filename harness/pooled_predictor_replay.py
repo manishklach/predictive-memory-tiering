@@ -8,15 +8,13 @@ from pathlib import Path
 from page_reuse_predictor import Predictor, reused
 
 
-def evaluate(root):
+def load_captures(root):
     cross = root / "selector-trajectories"
     paths = {"address": root / "candidate-headroom", "lru": cross / "lru",
              "predictor": cross / "predictor"}
     seeds = list(range(12345, 12357))
     grouped = {}
     hashes = {}
-    previous = json.loads((cross / "comparison.json").read_text())
-    address_reference = json.loads((paths["address"] / "predictor.json").read_text())
     for name, directory in paths.items():
         capture = directory / "candidates.jsonl.gz"
         hashes[name] = hashlib.sha256(capture.read_bytes()).hexdigest()
@@ -31,7 +29,16 @@ def evaluate(root):
             raise ValueError(f"incomplete seed coverage in {name}")
         grouped[name] = groups
 
-    results = {name: {} for name in paths}
+    return grouped, hashes
+
+
+def evaluate(root):
+    grouped, hashes = load_captures(root)
+    cross = root / 'selector-trajectories'
+    previous = json.loads((cross / "comparison.json").read_text())
+    address_reference = json.loads((root / "candidate-headroom" / "predictor.json").read_text())
+    seeds = sorted(grouped['address'])
+    results = {name: {} for name in grouped}
     for held_out in seeds:
         pooled = Predictor()
         original = Predictor()
