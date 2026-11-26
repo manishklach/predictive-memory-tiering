@@ -15,6 +15,7 @@ class BoundedEviction:
         if lru and not protect_recent:
             raise ValueError('LRU selection requires read history')
         self.lru = lru
+        self.followup = None
         self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
@@ -59,10 +60,14 @@ class BoundedEviction:
         else:
             victims = islice(eligible, budget)
         for i in victims:
+            if self.followup:
+                self.followup.before(i)
             self.backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * page, page)
             self.advised[i] = time.monotonic_ns()
             self.stats["requests"] += 1
-            self.stats["immediately_nonresident"] += int((self.residency(i * page, 1)[0] & 1) == 0)
+            resident = (self.followup.immediate(i, self.advised[i]) if self.followup
+                        else self.residency(i * page, 1)[0] & 1)
+            self.stats["immediately_nonresident"] += int(not resident)
 
     def on_read(self, offset, amount):
         now = time.monotonic_ns() if self.last_read is not None else None

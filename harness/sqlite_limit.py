@@ -54,6 +54,11 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         from bounded_eviction import BoundedEviction
         bounded = BoundedEviction(backing, address, libc, protect_recent=mode != "bounded-legacy",
                                   guard_ns=300_000_000 if mode == "bounded-300ms" else 100_000_000, lru=mode == "bounded-lru")
+    followup = None
+    if bounded and os.environ.get("PMT_RESIDENCY_FOLLOWUP") == "1":
+        from residency_followup import ResidencyFollowup
+        followup = ResidencyFollowup(bounded)
+        bounded.followup = followup
     observe = mode not in ("stock", "damos", "live", "live-score", "bounded-off", "bounded-on", "bounded-legacy", "bounded-300ms", "bounded-lru")
     if inline:
         lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
@@ -172,6 +177,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         consumed = 0
         for key in keys:
             t = time.perf_counter_ns()
+            if followup:
+                followup.poll(t)
             if bounded and consumed < len(detector.decisions):
                 consumed = len(detector.decisions)
                 region = detector.decisions[consumed - 1][1]
@@ -185,6 +192,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         elapsed = time.perf_counter_ns() - start
         if bounded:
             bounded.finish(start + elapsed)
+        if followup:
+            followup.close()
         used = resource.getrusage(resource.RUSAGE_SELF)
         if fault_probe:
             fault_end = fault_probe.snapshot()
@@ -217,7 +226,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
                           live_scored_epochs=len(scored) if detector else None,
                           live_candidate_epochs=sum(c is not None for c in scored) if detector else None,
                           live_region_records=len(monitor) if mode == "live" else None, damos_stats=stats, inline_score_calls=score_calls, history_only_calls=history_only_calls,
-                          profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, bounded_eviction=bounded.stats if bounded else None, pageout_requests=bounded.stats["requests"] if bounded else evictions, checksum=checksum)))
+                          profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, bounded_eviction=bounded.stats if bounded else None,
+                          residency_followup=followup.pages if followup else None, pageout_requests=bounded.stats["requests"] if bounded else evictions, checksum=checksum)))
 
 
 def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345, requests=REQUESTS):
