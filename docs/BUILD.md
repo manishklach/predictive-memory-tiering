@@ -23,12 +23,12 @@ The guest exercises the read and mmap transports and performs 101 load/unload cy
 
 ## Trace replay
 
-The local replay harness uses Python 3.10+ and the standard library. Run these commands from the directory containing `pmt`.
+The local replay harness uses Python 3.10+ and the standard library. Run these commands from the repository root.
 
 ```powershell
-python -m unittest discover -s pmt/traces -v
-python pmt/traces/capture_bfs.py pmt/results/bfs-trace.csv --vertices 2048 --rounds 3 --seed 17
-python pmt/traces/replay.py pmt/results/bfs-trace.csv --budget 50 --out pmt/results/bfs-replay-50.json
+python -m unittest discover -s traces -v
+python traces/capture_bfs.py local-bfs.csv --vertices 2048 --rounds 3 --seed 17
+python traces/replay.py results/bfs-trace.csv --budget 50 --out local-replay.json
 ```
 
 Replay accepts CSV with header `timestamp_ns,page,op`, monotonically nondecreasing nonnegative timestamps, nonnegative logical page IDs, and operation `R` or `W`. The breadth-first search capture records accesses to its edge array and visited bitmap. It omits interpreter, queue, and OS memory accesses. Instrumentation affects recorded timing and each new capture produces a different timestamp sequence. Replay the checked-in trace to reproduce the modeled metrics. Predictor CPU time and fit CPU time are measured by the local Python process and can vary.

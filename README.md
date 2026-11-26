@@ -6,12 +6,9 @@ When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it
 
 ## How it works
 
-1. A PID-scoped kernel module samples page activity and ranks eviction candidates by idle time, recency, frequency, reuse gaps, and write cost.
-2. The module uses the Linux swap path to page out selected anonymous pages to local NVMe. Demand faults continue through the kernel's stock swap-in path.
-3. A userspace process consumes the trace and predicts near-term reuse. The planned model ladder starts with stride and bounded Markov prediction within a one-core budget.
-4. Prefetch uses available DRAM headroom. The experiment accounts for reads that arrive late, pages prefetched and never used, and the extra flash traffic from both.
+The PID-scoped module emits synthetic sequence numbers through a bounded trace ring. A separate cooperative workload reports page accesses and residency to the C controller. The controller ranks eviction candidates and uses stride or Markov prediction. The workload applies the resulting advice to its own anonymous arena.
 
-The kernel module exports synthetic events through a read-only memory-mapped ring. The cooperative Linux runtime exercises live policy decisions and submits page-out and prefetch advice on a controlled anonymous arena. Live kernel page sampling and swap-prefetch integration are planned. [System design](docs/DESIGN.md) Â· [Cooperative runtime](docs/LOCAL-RUNTIME.md)
+The intended EC2 system will sample real target processes and tier their pages through local NVMe swap. Connecting that kernel path to the controller is still open. The replay detector and C controller currently use different scores, so replay cannot validate the controller's eviction decisions. [System design](docs/DESIGN.md) · [Cooperative runtime](docs/LOCAL-RUNTIME.md)
 
 ## What would count as a win?
 

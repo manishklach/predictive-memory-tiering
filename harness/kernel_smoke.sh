@@ -33,6 +33,19 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+if [ -d /sys/firmware/efi ]; then
+	boot_state=$(mokutil --sb-state)
+	case "$boot_state" in
+		*"SecureBoot enabled"*)
+			: "${PMT_MOK_KEY:?Set the path to the enrolled signing key}"
+			: "${PMT_MOK_CERT:?Set the path to its DER certificate}"
+			mokutil --test-key "$PMT_MOK_CERT"
+			"/lib/modules/$(uname -r)/build/scripts/sign-file" sha256 "$PMT_MOK_KEY" "$PMT_MOK_CERT" kernel/pmt.ko
+			;;
+		*"SecureBoot disabled"*) ;;
+		*) echo "Could not establish Secure Boot state: $boot_state" >&2; exit 1 ;;
+	esac
+fi
 insmod kernel/pmt.ko
 loaded=1
 test "$(cat "$state/enabled")" = 0
@@ -96,4 +109,11 @@ wait "$reader" 2>/dev/null || true
 reader=
 rmmod pmt
 loaded=0
-echo "PMT synthetic module smoke test passed"
+for cycle in $(seq 2 100); do
+    insmod kernel/pmt.ko
+    loaded=1
+    test "$(cat "$state/enabled")" = 0
+    rmmod pmt
+    loaded=0
+done
+echo "PMT synthetic module smoke test passed (100 load/unload cycles)"

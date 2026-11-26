@@ -14,8 +14,14 @@ pmt-local: harness/arena.c include/pmt_control.h
 module:
 	$(MAKE) -C "$(KDIR)" M="$(CURDIR)/kernel" W=1 modules
 
-test: test-reader test-local
+test: test-reader test-local checkpatch
 	$(PYTHON) -m unittest discover -s traces -v
+
+.PHONY: checkpatch
+checkpatch:
+	@if test -f "$(KDIR)/scripts/checkpatch.pl"; then \
+		perl "$(KDIR)/scripts/checkpatch.pl" --no-tree --file kernel/pmt.c; \
+	else echo "checkpatch skipped: unavailable in $(KDIR)"; fi
 
 test-reader: pmtd
 	$(PYTHON) harness/check_reader.py ./pmtd
