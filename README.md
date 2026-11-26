@@ -457,3 +457,17 @@ Reproduce at 7b3063d on the pinned T0 guest with `make test libpmt-profile.so` a
 On November 26, 2026, EC2 listed i7i.4xlarge in three Sydney availability zones. The instance type has 16 default vCPUs and one 3,750 GB instance-store SSD. The first On-Demand launch returned `VcpuLimitExceeded` against the regional Standard quota of 8 vCPUs. A quota increase to 16 was requested. This attempt produced no guest or T1 benchmark data.
 
 The pilot will compare stock, scoring only, and guarded page-out using seeds 12345–12356 and the same 19,660,800-byte memory cap as T0. Before collecting results on the pinned kernel, verify exclusive local instance-store swap and disabled zswap with `python3 harness/check_host.py --tier nvme-test --out host.json`. Run `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --bounded-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. The 50% cap refers to the SQLite workload's calibrated footprint.
+
+### Smaller-host Sydney NVMe pilot
+
+The i7i.2xlarge in ap-southeast-2a ran build bf48695 on kernel 7.0.14-pmt-damon. All active swap was on the EC2 NVMe instance-store SSD. Each arm ran the same 12 seeds and 3,000 SQLite queries per seed at the T0 workload cap of 19,660,800 bytes. Zswap was off. The fixed-range detector used its 32 KiB perf ring with a 100 ms aggregation interval and the eviction arm protected pages read in the preceding 100 ms.
+
+| Arm | Median p99 (ms) | Median queries/s | Throughput vs stock | First reuse within 100 ms / advised |
+|---|---:|---:|---:|---:|
+| Stock Linux | 0.249 | 32,983 | 100.0% | — |
+| Scoring only | 0.123 | 30,324 | 91.9% | — |
+| Guarded page-out | 0.150 | 28,970 | 87.8% | 0 advised |
+
+All 36 timed runs passed paired checksums and post-run database integrity checks, used swap and recorded zero OOM kills. The 16-vCPU i7i.4xlarge and larger working sets remain on the roadmap. [Raw runs](results/sydney-nvme-pilot/sqlite.json) · [Host and swap verification](results/sydney-nvme-pilot/host.json) · [Read-only fio baseline](results/sydney-nvme-pilot/fio.json)
+
+Guarded mode delivered 87.8% of stock throughput, below the 95% T0 qualification threshold, with 39.7% lower median p99. The 3,000-query loop was too short on local NVMe to exercise eviction: each monitored run completed zero or one scoring epoch, all 24 monitored runs had zero candidate epochs, and no page-out requests were issued. Early reuse has no denominator. The latency differences cannot establish an eviction benefit. A future NVMe experiment needs a longer timed query loop that spans multiple decision epochs.
