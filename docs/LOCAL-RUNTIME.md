@@ -43,3 +43,16 @@ python3 harness/check_swap_return.py --pte-prefault
 The compiled-controller replay preserves real timestamps and feeds its modeled residency back after each decision. The original fitted Python scorer remains available for historical replay. The scheduled scans demonstrate logical database page reuse. Physical anonymous-page sampling and actual swap traffic require separate measurements.
 
 On WSL, the default WILLNEED fixture observed a swap entry while mincore still reported residency. Its cold-return criterion was inconclusive. The separate POPULATE_READ fixture used page-table presence as its observation, induced a known swap-out, received a Markov prediction and restored the PTE before demand. All 4 KiB matched after return. Swap-cache residency was already true before advice, so this fixture provides no measurement of storage latency. [PTE evidence](../results/local-pte-return.json)
+
+### Hard-limit and sampling checks
+
+Run make before these commands. The hard-limit runner needs a writable cgroup v2 parent with the memory controller delegated. Each short-lived leaf contains the arena after its controller has started. The measured control peak covers memory charged after the arena joins the leaf. The runner uses half that peak, rounded down to a page, and rotates the four policies across three repeats.
+
+~~~sh
+python3 harness/hard_limit.py /tmp/pmt-limits.json --parent /path/to/delegated/parent
+python3 harness/check_region_sampling.py
+cc -O2 -Wall -Wextra -Werror -shared -fPIC harness/observe_prefetch.c -o /tmp/pmt-observer.so
+PMT_WORKLOAD_CGROUP="$LEAF" LD_PRELOAD=/tmp/pmt-observer.so ./pmt-local stride 4096 2048 3 10 1 0
+~~~
+
+For the observer run, set LEAF to an empty workload cgroup with the measured half-budget limit. LD_PRELOAD applies only to this diagnostic command. The observer checks mincore before advice, checks the workload's own read-byte counter across the syscall, and waits up to 50 ms for residency before returning to the workload. Record latency separately with the observer disabled. The region fixture uses clear_refs only on its disposable child, isolates four pages in distinct VMAs, and checks smaps against the known touch mask. Production-sized VMAs require finer sampling.

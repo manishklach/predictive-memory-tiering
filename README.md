@@ -76,3 +76,9 @@ On Sydney EC2 the development guest recovered from a deliberate panic. The team 
 The local SQLite workload alternates hot-key lookups with full scans of synthetic records. SQLite's VFS records main-database reads using monotonic completion timestamps. In the 305-second capture, 240 of 258 distinct database pages returned after a gap of at least 300 seconds. These are logical file reads under a deliberately scheduled workload. [Capture manifest](results/sqlite-long.json)
 
 Offline replay now has an entry point that sends observations to the same compiled controller used by the cooperative arena. With a 129-page soft target, detector-only, stride, and Markov had 240, 128, and 219 modeled repeat misses respectively. All three exceeded the target on 1,240 observations and the simulator assumes immediate successful advice. [Compiled-controller results](results/sqlite-long-controller.json)
+
+## Enforced local memory limit
+
+The WSL anonymous arena charged 17,039,360 peak bytes to its calibration cgroup. Each comparison run used a fresh cgroup with memory.max set to 8,519,680 bytes. Median p99 touch latency over three runs was 716 microseconds for stock, 714 for detector-only, 992 for stride, and 799 for Markov. These measurements cover timed page touches. Throughput also includes instrumentation and controller IPC. [All runs](results/local-hard-limit.json)
+
+A target-scoped smaps fixture identified known region touches and fed the observations to the compiled controller. A separate instrumented stride run observed 4,096 task read bytes across a WILLNEED syscall on a nonresident anonymous page and observed residency before returning to the workload. This verifies a cooperative return path on WSL swap. Module-originated live sampling and EC2 NVMe benchmarks remain open. [Region observations](results/local-regions.json) · [Prefetch evidence](results/local-cold-io.json)
