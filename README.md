@@ -223,3 +223,14 @@ On November 26, 2026, the Sydney T0 host ran the 12-seed SQLite comparison on EB
 All 48 runs passed query checks at a common 19,529,728-byte cgroup limit (half the calibrated stock peak rounded down to a page), used swap, and recorded zero OOM kills. The backing device was the 8 GiB gp3 root volume; swap was a dedicated 512 MiB file. The fio baseline used a separate 256 MiB file. The 15-second direct 4 KiB random-read test at queue depth one measured 1,411 IOPS and 1.63 ms p99 completion latency. The short 1 MiB sequential write at queue depth eight measured 173 MiB/s. [SQLite runs](results/sydney-t0/sqlite.json) · [fio random reads](results/sydney-t0/fio-read.json) · [fio sequential writes](results/sydney-t0/fio-write.json)
 
 The guest ran Ubuntu kernel 7.0.0-1018-aws with matching image and header packages held. Tests and module compilation passed, followed by 100 synthetic load/unload cycles with zero drops. Secure Boot was disabled. The unsigned out-of-tree module set the kernel taint value to 12288. The initial host audit recorded DAMON disabled. The recovery drill subsequently enabled kdump, verified the serial login prompt, triggered a deliberate panic, and extracted its panic message from the reassembled dump. The same EC2 instance then booted from a separate volume restored from the pre-panic snapshot and reproduced the benchmark file's SHA-256. The operator verified the private S3 archive by downloading and comparing it before stopping the guest. [Host audit](results/sydney-t0/host.json) · [Module smoke log](results/sydney-t0/smoke.log) · [Recovery evidence](results/sydney-t0/recovery.json)
+
+### Ubuntu generic kernel preflight for DAMON
+
+On November 26, 2026, the Ubuntu 24.04 amd64 package indexes selected the following kernels. Both packaged configurations contain `# CONFIG_DAMON is not set`. Neither candidate can provide the PID-scoped DAMON sysfs baseline, so this check required no EC2 boot or fio rerun.
+
+| Header metapackage | Resolved generic build | SHA-256 of packaged .config |
+| --- | --- | --- |
+| linux-headers-generic | 6.8.0-151.151 | 2a95703373dff24b38861577b0cd79869e2fd7470ed532dca4ec34b37a7701b4 |
+| linux-headers-generic-hwe-24.04 | 7.0.0-44.44~24.04.1 | d302f2fbed84b78593043047d7b736aa54aa4f53eeca1463b22e45bf7927cf88 |
+
+To repeat the check, refresh Noble's package indexes, resolve each metapackage with `apt-cache depends`, download its versioned amd64 header package with `apt-get download`, and extract it with `dpkg-deb -x`. Inspect the configuration under `usr/src/linux-headers-<release>-generic/.config`, including commented-out symbols. A future candidate with DAMON, VADDR and SYSFS enabled still needs a boot test, a PID-scoped DAMOS page-out exercise and fresh same-kernel baselines.
