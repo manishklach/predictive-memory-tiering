@@ -24,7 +24,8 @@ REQUESTS = 3000
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def worker(db, mode):
+def worker(db, mode, binary):
+    profiled = binary is not None
     size = db.stat().st_size
     pages = size // PAGE
     backing = mmap.mmap(-1, size, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
@@ -34,10 +35,10 @@ def worker(db, mode):
     libc = ctypes.CDLL(None, use_errno=True)
     bitmap = ctypes.create_string_buffer(pages)
     reads = evictions = 0
-    profile = dict(residency=0, controller_round_trip=0, pageout=0)
+    profile = dict(residency=0, controller_round_trip=0, pageout=0, scoring=0, pipe_path=0)
     ctl = None
     if mode != "stock":
-        ctl = subprocess.Popen([ROOT / "pmtd", "--control", str(pages), str(pages // 2),
+        ctl = subprocess.Popen([(binary or ROOT / "pmtd"), "--control", str(pages), str(pages // 2),
                                 "10", "1", "none"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     base = apsw.vfsnames()[0]
 
@@ -57,13 +58,19 @@ def worker(db, mode):
                     profile['residency'] += now - t
                     ctl.stdin.write(struct.pack("=QII", time.monotonic_ns(), page, 0) + bitmap.raw)
                     ctl.stdin.flush()
-                    victim, fetch = struct.unpack("=II", ctl.stdout.read(8))
+                    if profiled:
+                        victim, fetch, scoring = struct.unpack("=IIQ", ctl.stdout.read(16))
+                    else:
+                        victim, fetch = struct.unpack("=II", ctl.stdout.read(8))
                     replied = time.perf_counter_ns()
                     profile['controller_round_trip'] += replied - now
+                    if profiled:
+                        profile["scoring"] += scoring
+                        profile["pipe_path"] += replied - now - scoring
                     assert fetch == 0xffffffff
                     if victim != 0xffffffff:
                         backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), victim * PAGE, PAGE)
-                        if mode == "detector":
+                        if mode != "detector-full":
                             bitmap[victim] = 0  # Provisional until the next scan or touch.
                         profile['pageout'] += time.perf_counter_ns() - replied
                         evictions += 1
@@ -105,14 +112,14 @@ def worker(db, mode):
                           profile_ns=profile, reads=reads, pageout_requests=evictions, checksum=checksum)))
 
 
-def run(db, mode, limit):
+def run(db, mode, limit, binary=None):
     group = Path(tempfile.mkdtemp(prefix="pmt-sql-", dir="/sys/fs/cgroup"))
     try:
         if limit:
             (group / "memory.max").write_text(str(limit))
         def enter():
             (group / "cgroup.procs").write_text(str(os.getpid()))
-        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode],
+        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, *([binary] if binary else [])],
                                       preexec_fn=enter)
         return dict(mode=mode, **json.loads(raw), peak_bytes=int((group / "memory.peak").read_text()),
                     swap_peak_bytes=int((group / "memory.swap.peak").read_text()),
@@ -121,7 +128,7 @@ def run(db, mode, limit):
         group.rmdir()
 
 
-def main(output):
+def main(output, baseline):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -138,15 +145,24 @@ def main(output):
         for pair in range(4):
             orders = (("stock", "detector-full", "detector"), ("detector", "detector-full", "stock"),
                       ("detector-full", "stock", "detector"), ("detector", "stock", "detector-full"))
+            if baseline:
+                orders = tuple(tuple("detector-before" if m == "detector-full" else m for m in order)
+                               for order in orders)
             for mode in orders[pair]:
-                record = run(db, mode, limit)
+                binary = None
+                if baseline and mode != "stock":
+                    binary = baseline if mode == "detector-before" else ROOT / "pmtd-profile"
+                record = run(db, mode, limit, binary)
                 assert record["checksum"] == control["checksum"]
                 runs.append(dict(pair=pair + 1, **record))
         summary = {mode: {metric: statistics.median(r[metric] for r in runs if r["mode"] == mode)
-                          for metric in ("p99_us", "queries_per_s")} for mode in ("stock", "detector-full", "detector")}
+                          for metric in ("p99_us", "queries_per_s")} for mode in orders[0]}
         output.write_text(json.dumps(dict(kernel=platform.release(), sqlite=apsw.sqlitelibversion(),
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
+                             profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
+                                 for label, path in ([("before", baseline), ("after", ROOT / "pmtd-profile")]
+                                                     if baseline else [])},
                              calibration=control, memory_max_bytes=limit, runs=runs, median=summary),
                              indent=2) + "\n")
         print(summary)
@@ -154,8 +170,10 @@ def main(output):
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--worker"]:
-        worker(Path(sys.argv[2]), sys.argv[3])
+        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else None)
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
-        main(parser.parse_args().output)
+        parser.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
+        args = parser.parse_args()
+        main(args.output, args.profile_baseline)

@@ -8,3 +8,4 @@ __pycache__/
 /kernel/.*.cmd
 /kernel/Module.symvers
 /kernel/modules.order
+/pmtd-profile

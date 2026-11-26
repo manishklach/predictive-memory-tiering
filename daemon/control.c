@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+#include <time.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -155,6 +157,17 @@ static struct pmt_advice decide(struct policy *policy, const struct pmt_observat
 	return advice;
 }
 
+#ifdef PMT_PROFILE
+static uint64_t monotonic_ns(void)
+{
+	struct timespec now;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &now))
+		abort();
+	return (uint64_t)now.tv_sec * 1000000000 + now.tv_nsec;
+}
+#endif
+
 int pmt_control(uint32_t pages, uint32_t budget, uint64_t idle_ns,
 		uint64_t dwell_ns, enum pmt_model model)
 {
@@ -196,8 +209,18 @@ int pmt_control(uint32_t pages, uint32_t budget, uint64_t idle_ns,
 			break;
 		}
 		last_timestamp = obs.timestamp_ns;
+#ifdef PMT_PROFILE
+		uint64_t score_ns = monotonic_ns();
+#endif
 		advice = decide(policy, &obs, resident);
-		if (fwrite(&advice, sizeof(advice), 1, stdout) != 1 || fflush(stdout) == EOF) {
+#ifdef PMT_PROFILE
+		score_ns = monotonic_ns() - score_ns;
+#endif
+		if (fwrite(&advice, sizeof(advice), 1, stdout) != 1 ||
+#ifdef PMT_PROFILE
+		    fwrite(&score_ns, sizeof(score_ns), 1, stdout) != 1 ||
+#endif
+		    fflush(stdout) == EOF) {
 			perror("write advice");
 			break;
 		}

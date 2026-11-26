@@ -8,6 +8,9 @@ all: pmtd pmt-local
 pmtd: daemon/pmtd.c daemon/control.c include/pmt_uapi.h include/pmt_control.h
 	$(CC) $(CPPFLAGS) -Iinclude $(CFLAGS) -std=c11 -Wall -Wextra -Werror $(filter %.c,$^) $(LDFLAGS) -o $@
 
+pmtd-profile: daemon/pmtd.c daemon/control.c include/pmt_uapi.h include/pmt_control.h
+	$(CC) $(CPPFLAGS) -DPMT_PROFILE -Iinclude $(CFLAGS) -std=c11 -Wall -Wextra -Werror $(filter %.c,$^) $(LDFLAGS) -o $@
+
 pmt-local: harness/arena.c include/pmt_control.h
 	$(CC) $(CPPFLAGS) -Iinclude $(CFLAGS) -std=c11 -Wall -Wextra -Werror $< $(LDFLAGS) -o $@
 
@@ -30,5 +33,5 @@ test-local: pmtd pmt-local
 	$(PYTHON) harness/check_controller.py ./pmtd ./pmt-local
 
 clean:
-	$(RM) pmtd pmt-local
+	$(RM) pmtd pmtd-profile pmt-local
 	$(MAKE) -C "$(KDIR)" M="$(CURDIR)/kernel" clean
