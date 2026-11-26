@@ -1,5 +1,7 @@
 # Running the synthetic module smoke test
 
+The local QEMU test exercised 101 load/unload cycles. On EC2, first rehearse recovery on the designated development host and retain the crash dump and restore evidence. Then build against that host's running kernel and repeat the module checks below. The subsequent NVMe campaign requires a working live sampler and prefetch path before stock-versus-PMT comparisons can begin.
+
 The local build does not require a running EC2 instance. Use the designated, disposable Linux EC2 development host for module loading. Complete the v1 spec's T0 crash recovery rehearsal before treating the host as ready for module testing. The earlier Sydney `c7i-flex.large` boot test only verified OS and tooling.
 
 On the prepared host, record the AMI, instance type, region and AZ, running kernel, module-signing state, and the kernel taint flags. Install headers matching `uname -r`, a C compiler, make, and Python 3. Mount debugfs at `/sys/kernel/debug` if it is available and has not already been mounted. Copy the repo to the host and run:

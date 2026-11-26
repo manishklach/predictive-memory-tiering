@@ -19,6 +19,12 @@ The arena uses `MADV_PAGEOUT` and `MADV_WILLNEED`. An accepted advice call does 
 
 The target page count is a policy threshold. For a real cgroup limit, provide an already configured, delegated cgroup v2 directory with `PMT_WORKLOAD_CGROUP`. The arena joins it after spawning the controller, so only the workload enters this cgroup. The matrix records `memory.max` and `memory.swap.max` and leaves the unconstrained stock control outside that group. On a machine without a delegated cgroup, the two stock labels use the same native memory behavior.
 
-## Scope
+## Reading a matrix manifest
+
+Check the top-level `complete` field first. Each entry in `runs` includes a configuration label and child exit code. If a child fails, the runner stops the matrix, saves the earlier runs and available diagnostics, and exits with an error. It writes the manifest to a temporary file in the output directory and atomically replaces the destination.
+
+Use `advice_errors` and `controller_disconnected` to diagnose a failed arena run. Compare `eviction_attempts` with `immediate_nonresident_after_pageout` to see how often a residency check observed reclamation immediately. Read `prefetch_advice_accepted` alongside `resident_on_prefetched_access`, `nonresident_on_prefetched_access`, and `unused_prefetch`. A run with zero accepted prefetches provides no measurement of prefetch effectiveness.
+
+## Integration status
 
 The arena is a cooperative test workload. Live access sampling through the kernel module, the prefetch request ioctl, asynchronous swap-in, flash I/O attribution, and the representative EC2 workload campaign are separate milestones. Use this harness to check decisions, failure handling, and data integrity before connecting the compiled policy to those interfaces.
