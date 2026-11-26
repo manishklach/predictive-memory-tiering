@@ -1,0 +1,19 @@
+{
+  "scope": "Sydney development-host recovery rehearsal",
+  "date_utc": "2026-11-26",
+  "instance_type": "c7i-flex.large",
+  "kernel": "7.0.0-1018-aws",
+  "snapshot_completed_percent": 100,
+  "serial_login_prompt_observed": true,
+  "crash_kernel_loaded_before_panic": true,
+  "guest_boot_id_changed": true,
+  "dump_format": "flattened kdump compressed v6",
+  "dump_bytes": 460216343,
+  "dump_sha256": "7ff587291c498bdfb3d553a7a74a35a857160662e9c1418d13abeba67cb0713f",
+  "reassembled_dump_message": "Kernel panic - not syncing: sysrq triggered crash",
+  "crash_kernel_rearmed_after_reboot": true,
+  "snapshot_restore_check": "A new gp3 volume created from the stopped-host snapshot contained the prior PMT_SMOKE_PASS log on its ext4 root partition mounted ro,noload.",
+  "efi_mount_correction": "The guest selected the restored disk EFI partition during restart. Remounted the original EFI partition, confirmed its device, and verified the restored disk was fully unmounted before detach.",
+  "restore_scope": "filesystem recovery on a secondary volume; boot from the restored volume was not tested",
+  "regional_serial_console_setting_restored": true
+}

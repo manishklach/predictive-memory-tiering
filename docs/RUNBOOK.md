@@ -34,3 +34,5 @@ The helper checks the Project=pmt instance tag, archives the supplied directory,
 For the Sydney rehearsal, record Free Tier balance before startup, during compute use, and after stopping. Record snapshot and restore completion independently. Restore the regional serial console setting after the rehearsal. [Starting observations](../results/sydney-rehearsal-start.json)
 
 Verify the guest login prompt through an authenticated serial connection. After installing kdump-tools, reboot normally and confirm the running kernel reserved crash memory before testing panic recovery. [Sydney access checkpoint](../results/sydney-recovery-access.json)
+
+For a flattened kdump, reassemble it with makedumpfile -R before extracting dmesg. Verify the expected panic message and a changed guest boot ID. Attach a clone of a boot volume only after reboot is complete. Cloned partitions retain their identifiers. Resolve both disk serials and inspect all mount sources, including /boot/efi, before detaching a restored volume. [Sydney rehearsal](../results/sydney-recovery-crash.json)
