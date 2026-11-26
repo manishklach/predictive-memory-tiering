@@ -471,3 +471,19 @@ The i7i.2xlarge in ap-southeast-2a ran build bf48695 on kernel 7.0.14-pmt-damon.
 All 36 timed runs passed paired checksums and post-run database integrity checks, used swap and recorded zero OOM kills. The 16-vCPU i7i.4xlarge and larger working sets remain on the roadmap. [Raw runs](results/sydney-nvme-pilot/sqlite.json) · [Host and swap verification](results/sydney-nvme-pilot/host.json) · [Read-only fio baseline](results/sydney-nvme-pilot/fio.json)
 
 Guarded mode delivered 87.8% of stock throughput, below the 95% T0 qualification threshold, with 39.7% lower median p99. The 3,000-query loop was too short on local NVMe to exercise eviction: each monitored run completed zero or one scoring epoch, all 24 monitored runs had zero candidate epochs, and no page-out requests were issued. Early reuse has no denominator. The latency differences cannot establish an eviction benefit. A future NVMe experiment needs a longer timed query loop that spans multiple decision epochs.
+
+### Longer SQLite run on local NVMe
+
+The Sydney i7i.2xlarge ran 60,000 queries per seed (20 times the initial pilot) using the same 12 seeds, hot-key distribution, 19,660,800-byte cap, EBS root volume and exclusive instance-store NVMe swap with zswap off. Each seed continues its original pseudorandom query stream. The harness uses compact numeric arrays for long-run query keys and latency samples. Both PMT arms kept the 32 KiB reader and 100 ms aggregation interval. The guard still protects pages read in the last 100 ms and caps advice at 16 pages per decision and 64 distinct pages per run.
+
+| Arm | Median p99 (ms) | Median queries/s | Throughput vs stock | First reuse within 100 ms / advised |
+|---|---:|---:|---:|---:|
+| Stock Linux | 0.135 | 40,172 | 100.0% | — |
+| Scoring only | 0.102 | 36,538 | 91.0% | — |
+| Guarded page-out | 0.103 | 34,391 | 85.6% | 188/752 (25.0%) |
+
+Guarded page-out issued advice in 12/12 seeds. Of 752 advised pages, 662 were nonresident immediately afterward, and 177 were nonresident on their first read within 100 ms. Among pages with a full observation window, 188/752 were reused within 100 ms. All 36 runs passed query checksums and post-timing whole-mapping integrity checks, used swap and recorded zero OOM kills.
+
+Reproduce at ccb9a36 on the pinned 7.0.14-pmt-damon kernel with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --requests 60000 --bounded-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Per-seed results](results/sydney-nvme-pilot/long/sqlite.json) · [Swap verification](results/sydney-nvme-pilot/long/host.json) · [fio baseline](results/sydney-nvme-pilot/long/fio.json)
+
+The longer loop exercised page-out in every seed. Guarded p99 was 23.5% lower than stock and lower in all 12 pairs, while throughput reached 85.6% of stock, below the 95% target. Scoring alone delivered slightly lower median p99 and 6.2% higher median throughput than guarded page-out. Eleven guarded runs reached the 64-page limit, so the measurements cover bounded intervention. This pilot shows that PMT can actuate on local NVMe; it does not establish an incremental performance benefit from eviction on this workload.
