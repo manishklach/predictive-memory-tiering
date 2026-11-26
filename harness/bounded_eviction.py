@@ -9,7 +9,8 @@ RECENT_NS = 100_000_000
 
 
 class BoundedEviction:
-    def __init__(self, backing, address, libc, protect_recent=True):
+    def __init__(self, backing, address, libc, protect_recent=True, guard_ns=RECENT_NS):
+        self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
         self.libc = libc
@@ -37,7 +38,7 @@ class BoundedEviction:
             return
         bits = self.residency(start * page, end - start)
         budget = min(16, 64 - len(self.advised))
-        cutoff = time.monotonic_ns() - RECENT_NS
+        cutoff = time.monotonic_ns() - self.guard_ns
         for i, resident in enumerate(bits, start):
             if resident & 1 and i not in self.advised:
                 if self.last_read is not None and self.last_read[i] >= cutoff:

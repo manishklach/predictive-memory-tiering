@@ -50,10 +50,11 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     ctl = None
     inline = mode in ("scoring-only", "detector-inline")
     bounded = None
-    if mode in ("bounded-on", "bounded-legacy"):
+    if mode in ("bounded-on", "bounded-legacy", "bounded-300ms"):
         from bounded_eviction import BoundedEviction
-        bounded = BoundedEviction(backing, address, libc, protect_recent=mode == "bounded-on")
-    observe = mode not in ("stock", "damos", "live", "live-score", "bounded-off", "bounded-on", "bounded-legacy")
+        bounded = BoundedEviction(backing, address, libc, protect_recent=mode != "bounded-legacy",
+                                  guard_ns=300_000_000 if mode == "bounded-300ms" else 100_000_000)
+    observe = mode not in ("stock", "damos", "live", "live-score", "bounded-off", "bounded-on", "bounded-legacy", "bounded-300ms")
     if inline:
         lib = ctypes.CDLL(str(ROOT / "libpmt-profile.so"))
         ptr = ctypes.c_void_p
@@ -149,11 +150,11 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     for stage in profile:
         profile[stage] = 0
     stats = None
-    detector = RegionDetector() if mode in ("live-score", "bounded-off", "bounded-on", "bounded-legacy") else None
+    detector = RegionDetector() if mode in ("live-score", "bounded-off", "bounded-on", "bounded-legacy", "bounded-300ms") else None
     context = nullcontext()
     if mode == "damos":
         context = pageout(os.getpid(), address, size)
-    elif mode in ("bounded-off", "bounded-on", "bounded-legacy"):
+    elif mode in ("bounded-off", "bounded-on", "bounded-legacy", "bounded-300ms"):
         ranges = [(address, address + size)]
         context = sampling(os.getpid(), ranges, detector, buffer_kb=32)
     elif mode in ("live", "live-score"):
@@ -237,8 +238,8 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345,
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS):
-    bounded_trial = bounded_trial or selection_trial or scoring_trial
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False):
+    bounded_trial = bounded_trial or selection_trial or scoring_trial or guard_trial
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -308,8 +309,8 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         if bounded_trial:
             orders = list(permutations(("stock", "bounded-off", "bounded-on"))) * 2
             random.Random(1207).shuffle(orders)
-        if selection_trial:
-            modes = ["stock", "bounded-off", "bounded-on", "bounded-legacy"]
+        if selection_trial or guard_trial:
+            modes = ["stock", "bounded-off", "bounded-on", "bounded-300ms" if guard_trial else "bounded-legacy"]
             orders = []
             rng = random.Random(1207)
             for block in range(3):
@@ -363,6 +364,7 @@ if __name__ == "__main__":
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--scoring-trial", action="store_true", help="matched stock and fixed-range scoring-only runs with opaque SQLite payloads")
+        group.add_argument("--guard-trial", action="store_true", help="compare 100 ms and 300 ms page selection with a fixed 100 ms reuse metric")
         group.add_argument("--selection-trial", action="store_true", help="add an unguarded eviction control to the bounded trial")
         group.add_argument("--bounded-trial", action="store_true", help="compare stock and live scoring with bounded page-out off/on")
         group.add_argument("--live-profile", action="store_true", help="profile stock, live sampling and live scoring across twelve matched seeds")
@@ -377,4 +379,4 @@ if __name__ == "__main__":
         args = parser.parse_args()
         if args.requests < 1:
             parser.error('--requests must be positive')
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial)
