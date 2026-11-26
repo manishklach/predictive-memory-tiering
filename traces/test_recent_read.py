@@ -59,3 +59,17 @@ class RecentReadSelection(unittest.TestCase):
             selector.on_read(20 * page, page)
             selector.apply((2 * page, 23 * page))
         self.assertEqual(list(selector.advised), [19, 21] + list(range(17, 3, -1)))
+
+    def test_swap_filter_backfills_budget_in_lru_order(self):
+        page = mmap.PAGESIZE
+        backing = MagicMock()
+        backing.__len__.return_value = 20 * page
+        selector = BoundedEviction(backing, page, None, lru=True, skip_swapped=True)
+        selector.residency = lambda offset, pages: [1] * pages
+        selector.followup = MagicMock()
+        selector.followup.before.side_effect = lambda i, skip: not (skip and i in (0, 2, 5))
+        selector.followup.immediate.return_value = False
+        selector.apply((page, 21 * page))
+        self.assertEqual(list(selector.advised), [i for i in range(19) if i not in (0, 2, 5)])
+        self.assertEqual(selector.stats["swap_skips"], 3)
+        self.assertEqual(selector.stats["requests"], 16)
