@@ -31,7 +31,8 @@ def summarize(directory, output):
                                      pte=pte, next_ns=nxt, next_query=nq))
                 k = min(event["budget"], len(rows))
                 out.write(json.dumps(dict(seed=seed, epoch=epoch, ns=start, query=q, k=k,
-                                          candidates=rows), separators=(",", ":")) + "\n")
+                                          candidates=rows, selected=event.get("selected"),
+                                          complete_100ms=final_read_ns - start >= 100_000_000), separators=(",", ":")) + "\n")
                 for horizon, complete in (("100ms", final_read_ns - start >= 100_000_000), ("64_queries", q + 63 <= 60000)):
                     if not complete:
                         continue

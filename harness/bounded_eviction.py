@@ -60,8 +60,14 @@ class BoundedEviction:
         eligible = eligible_pages()
         if self.capture:
             eligible = list(eligible)
-            self.capture.epoch(self, eligible, budget)
-        if self.predictor:
+            snapshot = self.capture.epoch(self, eligible, budget)
+        if self.predictor and self.capture:
+            def snapshot_risk(row):
+                i, stamp, pte = row
+                features = dict(page=i, last_read_ns=stamp, pte=pte)
+                return self.predictor.score(snapshot, features), i
+            victims = [r[0] for r in nsmallest(budget, snapshot['candidates'], key=snapshot_risk)]
+        elif self.predictor:
             from residency_followup import pagemap_state
             epoch = {"ns": time.monotonic_ns()}
             with open("/proc/self/pagemap", "rb") as pagemap:
@@ -78,6 +84,9 @@ class BoundedEviction:
             victims = nsmallest(budget, eligible, key=self.last_read.__getitem__)
         else:
             victims = islice(eligible, budget)
+        if self.capture:
+            victims = list(victims)
+            self.capture.record(snapshot, victims)
         with (open("/proc/self/pagemap", "rb") if self.skip_swapped and not self.followup
               else nullcontext()) as pagemap:
             for i in victims:

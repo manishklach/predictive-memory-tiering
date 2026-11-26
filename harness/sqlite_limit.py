@@ -63,6 +63,12 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         from candidate_capture import CandidateCapture
         capture = CandidateCapture(Path(os.environ['PMT_CANDIDATE_DIR']), seed)
         bounded.capture = capture
+    if mode in ('bounded-lru', 'bounded-predictor') and os.environ.get('PMT_TRAJECTORY_DIR'):
+        from candidate_capture import CandidateCapture
+        directory = Path(os.environ['PMT_TRAJECTORY_DIR']) / mode
+        directory.mkdir(exist_ok=True)
+        capture = CandidateCapture(directory, seed)
+        bounded.capture = capture
     followup = None
     if bounded and os.environ.get("PMT_RESIDENCY_FOLLOWUP") == "1":
         from residency_followup import ResidencyFollowup

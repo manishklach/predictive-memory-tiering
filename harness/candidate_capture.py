@@ -20,9 +20,11 @@ class CandidateCapture:
     def epoch(self, selector, pages, budget):
         rows = [[p, selector.last_read[p], pagemap_state(self.pagemap.fileno(), selector.address, p)]
                 for p in pages]
-        if rows:
-            self.epochs.write(json.dumps(dict(ns=time.monotonic_ns(), query=self.query,
-                                              budget=budget, candidates=rows)) + "\n")
+        return dict(ns=time.monotonic_ns(), query=self.query, budget=budget, candidates=rows)
+
+    def record(self, event, victims):
+        if event['candidates']:
+            self.epochs.write(json.dumps(dict(event, selected=victims)) + "\n")
 
     def read(self, offset, amount, now):
         self.reads.write(READ.pack(now, self.query, offset // mmap.PAGESIZE,
