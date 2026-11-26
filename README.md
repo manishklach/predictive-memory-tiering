@@ -189,3 +189,18 @@ At interval 64, throughput increased 76% and p99 fell 31% relative to scoring ev
 The WSL2 benchmark ran four seeded, randomized rounds at a common 19,406,848-byte RAM limit, half the calibrated stock peak rounded down to a page. Each run checked the same 3,000 query results, used swap, and recorded zero OOM kills. [Raw runs and counters](results/sqlite-scoring-50.json)
 
 Reproduce with `make pmtd libpmt-profile.so` followed by `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-scoring.json --scoring-sweep`.
+
+### Scoring every 64, 128, or 256 observations across 12 query seeds
+
+Stock Linux led on both median metrics. Scoring every 256 observations gave the best detector result, reaching 90.9% of stock throughput with 8.3% higher p99. The earlier four-repeat p99 advantage at interval 64 did not repeat: interval 64 beat stock p99 in one of these 12 matched rounds.
+
+| Mode | Median query p99 (ms) | Median queries/s | Rounds with lower p99 than stock | Rounds with higher throughput than stock |
+| --- | ---: | ---: | ---: | ---: |
+| Stock Linux | 0.715 | 9,653 | — | — |
+| Score every 64 | 0.970 | 6,701 | 1/12 | 0/12 |
+| Score every 128 | 0.821 | 8,120 | 2/12 | 1/12 |
+| Score every 256 | 0.774 | 8,775 | 4/12 | 1/12 |
+
+Each WSL2 round used one query seed shared across all four modes (seeds 12345–12356), with 3,000 queries per run. Each mode occupied each run position three times. All 48 runs used fresh cgroups capped at 19,406,848 bytes, half the calibrated stock peak rounded down to a page. The detector refreshed residency every 256 observations, maintained touch history on every observation, and could issue page-out advice only on a scoring pass. All runs passed query checks, used swap, and recorded zero OOM kills. [Per-run timings, seeds, and scoring counters](results/sqlite-scoring-extended-50.json)
+
+Reproduce with `make pmtd libpmt-profile.so` followed by `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-scoring-extended.json --extended-scoring`.

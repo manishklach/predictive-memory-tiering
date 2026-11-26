@@ -24,7 +24,7 @@ REQUESTS = 3000
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def worker(db, mode, binary, interval, score_interval):
+def worker(db, mode, binary, interval, score_interval, seed):
     profiled = binary is not None
     size = db.stat().st_size
     pages = size // PAGE
@@ -124,7 +124,7 @@ def worker(db, mode, binary, interval, score_interval):
     conn = apsw.Connection(str(db), flags=apsw.SQLITE_OPEN_READONLY, vfs="pmt-bench")
     conn.execute("pragma mmap_size=0")
     conn.execute("pragma cache_size=8")
-    rng = random.Random(12345)
+    rng = random.Random(seed)
     keys = [rng.randrange(ROWS if i % 2 else 64) for i in range(REQUESTS)]
     times = []
     checksum = 0
@@ -153,14 +153,14 @@ def worker(db, mode, binary, interval, score_interval):
                           profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
 
 
-def run(db, mode, limit, binary=None, interval=16, score_interval=1):
+def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345):
     group = Path(tempfile.mkdtemp(prefix="pmt-sql-", dir="/sys/fs/cgroup"))
     try:
         if limit:
             (group / "memory.max").write_text(str(limit))
         def enter():
             (group / "cgroup.procs").write_text(str(os.getpid()))
-        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, str(interval), str(score_interval), *([binary] if binary else [])],
+        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, str(interval), str(score_interval), str(seed), *([binary] if binary else [])],
                                       preexec_fn=enter)
         return dict(mode=mode, **json.loads(raw), peak_bytes=int((group / "memory.peak").read_text()),
                     swap_peak_bytes=int((group / "memory.swap.peak").read_text()),
@@ -169,7 +169,7 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1):
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep):
+def main(output, baseline, stages, sweep, scoring_sweep, extended):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -190,9 +190,9 @@ def main(output, baseline, stages, sweep, scoring_sweep):
             modes = ("stock", "observation-only", "scoring-only", "detector-inline")
             orders = [tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4)]
         settings = {}
-        if scoring_sweep:
+        if scoring_sweep or extended:
             settings["stock"] = ("stock", 256, 1)
-            for cadence in (1, 4, 16, 64):
+            for cadence in ((64, 128, 256) if extended else (1, 4, 16, 64)):
                 settings[f"score-every-{cadence}"] = ("detector-inline", 256, cadence)
         if sweep:
             settings["stock"] = ("stock", 16, 1)
@@ -202,17 +202,28 @@ def main(output, baseline, stages, sweep, scoring_sweep):
         if settings:
             rng = random.Random(1207)
             orders = [rng.sample(list(settings), len(settings)) for _ in range(4)]
+        if extended:
+            modes = list(settings)
+            orders = []
+            for block in range(3):
+                rng.shuffle(modes)
+                orders.extend(tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4))
         for pair, order in enumerate(orders):
+            seed = 12345 + pair if extended else 12345
+            expected_checksum = control["checksum"] if seed == 12345 else None
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
                 worker_mode, interval, cadence = settings.get(mode, (mode, 16, 1))
-                record = run(db, worker_mode, limit, binary, interval, cadence)
+                record = run(db, worker_mode, limit, binary, interval, cadence, seed)
                 record["mode"] = mode
-                if scoring_sweep:
+                if scoring_sweep or extended:
                     record["score_interval"] = None if mode == "stock" else cadence
                 if settings:
                     record["refresh_interval"] = None if mode == "stock" else interval
-                assert record["checksum"] == control["checksum"]
+                if expected_checksum is None:
+                    expected_checksum = record["checksum"]
+                assert record["checksum"] == expected_checksum
+                record["query_seed"] = seed
                 runs.append(dict(pair=pair + 1, **record))
         summary = {mode: {metric: statistics.median(r[metric] for r in runs if r["mode"] == mode)
                           for metric in ("p99_us", "queries_per_s")} for mode in orders[0]}
@@ -230,14 +241,15 @@ def main(output, baseline, stages, sweep, scoring_sweep):
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--worker"]:
-        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[6] if len(sys.argv) > 6 else None, int(sys.argv[4]), int(sys.argv[5]))
+        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[7] if len(sys.argv) > 7 else None, int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]))
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--extended-scoring", action="store_true", help="compare 64, 128 and 256 over 12 matched seeds")
         group.add_argument("--scoring-sweep", action="store_true", help="rank every 1, 4, 16 or 64 observations at residency interval 256")
         group.add_argument("--sampling-sweep", action="store_true", help="compare refresh intervals of 16, 64 and 256 observations")
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring)
