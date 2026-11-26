@@ -1,0 +1,22 @@
+{
+  "date_utc": "2026-11-26",
+  "region": "ap-southeast-2",
+  "availability_zone": "ap-southeast-2a",
+  "instance_type": "c7i.2xlarge",
+  "ami": "ami-048c1a9eb63a67eed",
+  "kernel": "7.0.0-1018-aws",
+  "snapshot_completed": true,
+  "serial_ssh_authenticated_and_guest_login_prompt_observed": true,
+  "regional_serial_access_restored_disabled": true,
+  "crash_dump_bytes": 867116886,
+  "crash_dump_sha256": "c0343ccb7e8d63ed281abe0c66511a1de0c3113d93e31400afaedb7b80ba9240",
+  "makedumpfile_capture_warning": "The kernel version is not supported; the operation may be incomplete",
+  "reassembled_dump_dmesg_verified": "Kernel panic - not syncing: sysrq triggered crash",
+  "boot_id_changed_after_panic": true,
+  "kdump_rearmed": true,
+  "restored_root_verified_by_disk_serial_and_guest_login": true,
+  "sqlite_sha256_after_restore": "570475a39daa685f213eb961c1e496fa9b875074d9bb5c5f39241c5197e432f4",
+  "final_private_archive_sha256": "3aa6d5ce3c665e8519ac1ef690cdfaaa2d1245c365794bc63ccd5fa9c8d29fea",
+  "archive_download_byte_comparison_passed": true,
+  "final_instance_state": "stopped"
+}

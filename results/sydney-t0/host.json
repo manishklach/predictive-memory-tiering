@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "tier": "development",
+  "os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo",
+  "kernel": "7.0.0-1018-aws",
+  "architecture": "x86_64",
+  "page_bytes": 4096,
+  "config_source": "/boot/config-7.0.0-1018-aws",
+  "features": {
+    "CONFIG_DAMON": "n",
+    "CONFIG_DAMON_VADDR": "n",
+    "CONFIG_DAMON_SYSFS": "n",
+    "CONFIG_IDLE_PAGE_TRACKING": "y",
+    "CONFIG_LRU_GEN": "y",
+    "CONFIG_SWAP": "y",
+    "CONFIG_TRANSPARENT_HUGEPAGE": "y",
+    "CONFIG_DEBUG_FS": "y",
+    "CONFIG_ZSWAP": "y"
+  },
+  "matching_headers": true,
+  "cgroup_controllers": [
+    "cpuset",
+    "cpu",
+    "io",
+    "memory",
+    "hugetlb",
+    "pids",
+    "rdma",
+    "misc",
+    "dmem"
+  ],
+  "thp": "always [madvise] never",
+  "mglru": "0x0007",
+  "zswap": "N",
+  "crash_kernel_loaded": "0",
+  "kernel_taint": "0",
+  "secure_boot": "disabled",
+  "active_swap": [],
+  "blockers": [
+    "CONFIG_DAMON is unavailable or unverified",
+    "CONFIG_DAMON_VADDR is unavailable or unverified",
+    "CONFIG_DAMON_SYSFS is unavailable or unverified"
+  ]
+}

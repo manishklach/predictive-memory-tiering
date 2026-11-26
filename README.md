@@ -208,3 +208,18 @@ Reproduce with `make pmtd libpmt-profile.so` followed by `sudo /usr/bin/python3 
 ### Formal Sydney T0 launch attempt
 
 EC2 listed the designated `c7i.2xlarge` in three Sydney availability zones. The permission dry run succeeded, but the actual launch returned `InvalidParameterCombination` because the instance type is ineligible on the active Free account plan. The planned 256/256 rehearsal therefore produced no guest measurements. The earlier Sydney recovery evidence applies to the smaller compatibility host. [Launch record](results/sydney-t0-launch.json)
+
+### Sydney formal T0 rehearsal on c7i.2xlarge
+
+On November 26, 2026, the Sydney T0 host ran the 12-seed SQLite comparison on EBS-backed swap. At 256/256 the detector delivered 99.5% of stock median throughput and 8.2% lower median p99. It beat stock p99 in eight of twelve paired rounds and throughput in five. The measurements cover cooperative SQLite on one host with a small working set. T1 still needs live sampling, a DAMON-capable kernel, and the NVMe workload campaign.
+
+| Mode (residency interval 256 for all detectors) | Median query p99 (ms) | Median queries/s |
+| --- | ---: | ---: |
+| Stock Linux | 1.719 | 4,200 |
+| Score every 64 | 1.585 | 3,819 |
+| Score every 128 | 1.557 | 4,170 |
+| Score every 256 | 1.577 | 4,178 |
+
+All 48 runs passed query checks at a common 19,529,728-byte cgroup limit (half the calibrated stock peak rounded down to a page), used swap, and recorded zero OOM kills. The backing device was the 8 GiB gp3 root volume; swap was a dedicated 512 MiB file. The fio baseline used a separate 256 MiB file. The 15-second direct 4 KiB random-read test at queue depth one measured 1,411 IOPS and 1.63 ms p99 completion latency. The short 1 MiB sequential write at queue depth eight measured 173 MiB/s. [SQLite runs](results/sydney-t0/sqlite.json) · [fio random reads](results/sydney-t0/fio-read.json) · [fio sequential writes](results/sydney-t0/fio-write.json)
+
+The guest ran Ubuntu kernel 7.0.0-1018-aws with matching image and header packages held. Tests and module compilation passed, followed by 100 synthetic load/unload cycles with zero drops. Secure Boot was disabled. The unsigned out-of-tree module set the kernel taint value to 12288. The initial host audit recorded DAMON disabled. The recovery drill subsequently enabled kdump, verified the serial login prompt, triggered a deliberate panic, and extracted its panic message from the reassembled dump. The same EC2 instance then booted from a separate volume restored from the pre-panic snapshot and reproduced the benchmark file's SHA-256. The operator verified the private S3 archive by downloading and comparing it before stopping the guest. [Host audit](results/sydney-t0/host.json) · [Module smoke log](results/sydney-t0/smoke.log) · [Recovery evidence](results/sydney-t0/recovery.json)
