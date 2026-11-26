@@ -649,3 +649,11 @@ Adding the aligned 128-page range to idle time avoided 39 early reuses on the ad
 Each fold held one of 12 seeds out across all three captures. All variants used the same training encounters, feature order, smoothing weight, address tie-break, candidate sets and decision budgets. Features removed from the model were omitted from its hierarchical frequency table. The full-model and LRU counts matched the earlier pooled replay for every seed and trajectory. The comparison is exploratory because model selection and reporting use the same 12 held-out folds. Live policy performance remains unmeasured for the idle-only variant.
 
 Reproduce with `python harness/feature_ablation.py`. [Per-seed ablation counts](results/sydney-nvme-pilot/selector-trajectories/feature-ablation.json)
+
+### Stage 1 swap-fault attribution on the Sydney pilot
+
+The diagnostic module registers up to 64 advised virtual pages for the SQLite query thread and measures elapsed time in `do_swap_page`. A scheduler tracepoint measures time from a sleeping switch-out inside that fault until the thread runs again. This includes wake-to-run delay. The probe also reports the task delay-accounting swap-in delta. It registers while the device is open and the harness checks for missed probe instances.
+
+The first Sydney control recorded one 3.681 µs handler call with zero sleeping time after page-out. This demonstrated that a swapped PTE alone cannot validate a storage stall. The stronger fixture requires physically nonresident pages, a positive sleeping interval, a resident control and an unregistered control. The comparison harness uses balanced trace-on and trace-off arms for LRU and idle-only, with common residency probes, 12 held-out seeds, 60,000 queries per seed and the original half-memory cap. Bytes transitioning from a present, resident page to nonresident at each checkpoint are a workload-local reclaim estimate. The stronger control and comparison await validated results.
+
+[Kernel probe](kernel/swapfault/pmt_swapfault.c) · [Validation fixture](harness/swap_trace.py) · [Per-seed aggregation](harness/summarize_swapfault.py)
