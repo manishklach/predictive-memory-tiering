@@ -41,20 +41,22 @@ def validate():
     trace.mark(address + size, 1)
     with open("/proc/self/pagemap", "rb") as pm:
         for i in (1, 2):
-            buf.madvise(mmap.MADV_PAGEOUT, i * size, size)
+            buf.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * size, size)
             for _ in range(100):
                 if pagemap_state(pm.fileno(), address, i) == "swapped":
                     break
                 time.sleep(.01)
             else:
                 raise RuntimeError("control failed to swap")
-        for i in (0, 2, 1):
+        time.sleep(.1)
+        for i in (0, 1, 2):
             assert buf[i * size] == 17 + i
     result = trace.finish()
     assert set(result) == {0, 1} and result[0]["calls"] == 0 and result[1]["calls"] >= 1
-    assert result[1]["handler_ns"] > 0
+    assert result[1]["handler_ns"] >= result[1]["swapin_delay_ns"] > 0
     print(json.dumps(result))
 
 
 if __name__ == "__main__":
     validate()
+
