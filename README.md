@@ -414,3 +414,24 @@ Reuse is measured at the first SQLite mapping read after advice. The final colum
 
 
 The guard reduced early reuse from 29.8% to 2.8% of advised pages. Among pages with a full observation window the rates were 33.3% and 3.1%. The old selector found 206 pages nonresident on early reuse, compared with 15 for the guard. This improvement in selection did not close the throughput gap. Guarded throughput reached 86.6% of stock, below the 95% T1 threshold. Median p99 was 10.9% lower than stock and lower in 11 of 12 paired seeds. T1 remains on hold.
+
+### Scoring-only profile on opaque SQLite records
+
+Sydney T0 ran two paired passes at the same 19,660,800-byte cap with the recent-read guard in the source tree and page-out disabled in both arms. Each pass alternated stock and fixed-range scoring across seeds 12345–12356, with 3,000 queries per seed. The 32 KiB active trace buffer, 5 ms sampling, 100 ms aggregation, C cold score, EBS swap and disabled zswap were held fixed.
+
+| Pass | Arm | Median p99 (ms) | Median queries/s | Query-thread block I/O delay (ms) | Major faults | Kernel memory at query start (KiB) |
+|---|---|---:|---:|---:|---:|---:|
+| Before | Linux | 1.230 | 4,365 | 600.9 | 850.5 | 214 |
+| Before | Scoring only | 1.188 | 3,949 | 644.5 | 908 | 398 |
+| After | Linux | 1.172 | 4,271 | 615.4 | 866.5 | 216 |
+| After | Scoring only | 1.139 | 4,189 | 619.2 | 921.5 | 276 |
+
+TASKSTATS block-I/O delay covers synchronous waits on the SQLite query thread. The cgroup memory snapshot precedes the timed query loop. All 48 timed runs passed paired checksums and post-run database integrity checks, used swap, and had zero OOM kills and zero PMT page-out requests. [Baseline measurements](results/sydney-damon/formal/score-gap-before.json) · [Rerun measurements](results/sydney-damon/formal/score-gap-after.json)
+
+The fixed-range scorer now opens one 32 KiB binary perf ring on the dedicated DAMON thread. Previously it created a private tracefs instance with a 32 KiB buffer per CPU and parsed text records. The new reader follows the thread across CPUs and reads field offsets from the kernel's event format. It requires permission to open the DAMON tracepoint with perf_event_open. Observation-only and automatic-range capture continue using tracefs.
+
+The scoring throughput gap narrowed from 9.5% to 1.9% when comparing each pass with its own stock median. The median of the 12 paired throughput differences moved from -8.4% to -0.7%. The block-I/O wait difference between arm medians fell from 43.5 ms to 3.8 ms, and the excess kernel memory at query entry fell from 184 KiB to 60 KiB. Major fault counts did not decrease. The experiment changed the transport as a whole, so it cannot attribute the improvement to buffer size alone.
+
+The new reader scored 74 epochs across 12 runs and selected the cold half in all 48 settled fixture decisions. Its median p99 was 2.8% lower than stock, with lower p99 in five of twelve paired seeds. Scoring alone cleared the 95% throughput threshold in this run. The T1 decision still depends on the full guarded page-out configuration. [Cold-region validation](results/sydney-damon/formal/score-gap-flip.json)
+
+For reproduction, use build 7941511 for the baseline and 2bac844 for the binary reader. On the pinned T0 guest with kernel.task_delayacct enabled before launching workers, run `make test libpmt-profile.so` and `sudo env PMT_FAULT_PROFILE=1 /usr/bin/python3 harness/sqlite_limit.py output.json --scoring-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. Restore the original delay accounting setting afterward.
