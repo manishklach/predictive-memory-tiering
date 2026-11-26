@@ -26,3 +26,15 @@ Each formal run needs a manifest containing the code revision, instance type and
 | M7 · Bare metal | After G3 passes, repeat a predeclared subset of configurations on bare metal |
 
 A failed gate is an experimental result. Keep the workload, thresholds, and metric definitions fixed for the campaign and publish which baseline held up and where. Run any revised protocol as a separately labeled campaign with fresh baselines.
+
+### Page-level selector headroom
+
+Sydney `i7i.2xlarge` is the NVMe pilot. Formal T1 remains on the roadmap on `i7i.4xlarge` with larger working sets.
+
+A chronological replay of the 22,528-read SQLite scheduled-scan trace found zero observable headroom within the selected regions. Address order, LRU, a fitted reuse-risk table and an oracle with future knowledge each selected 0 pages reused within 100 ms out of 2,752 selections, and 48 within 64 VFS reads out of 2,800. Counts include repeated selection opportunities. This small trace cannot establish whether page-level prediction improves the Sydney workload.
+
+The screen splits by event index, fits on the first half and scores the second. It excludes training labels that cross the split and incomplete outcome windows. Every 64 reads it groups previously seen pages by aligned 32-page file ranges and applies the 100 ms recent-read guard. Among groups with more than 16 eligible pages, it chooses the group whose newest eligible read is oldest. All selectors choose 16 pages from the same group. The risk table uses logarithmic idle-time and access-count buckets with Laplace smoothing. Regions are simulated, residency is unknown, and decisions do not evict pages. The trace records reads rather than query boundaries.
+
+The next pilot capture needs eligible page IDs at each real decision, their pre-advice residency and read history, and timestamped subsequent reads with query IDs. Those records allow matched-volume oracle and held-out seed comparisons on actual candidate sets before a timed policy trial.
+
+Reproduce with `python traces/page_headroom.py results/sqlite-long.csv results/sqlite-page-headroom.json`.

@@ -1,0 +1,23 @@
+{
+  "trace_sha256": "a958cc8033b180c4a0e33748a3d754620b5a77f4b4f7fee5932e9f2bd4bf98e2",
+  "events": 22528,
+  "split_event": 11264,
+  "held_out_counts": {
+    "100ms": {
+      "epochs": 172,
+      "selected_per_policy": 2752,
+      "address": 0,
+      "lru": 0,
+      "learned": 0,
+      "oracle": 0
+    },
+    "64_reads": {
+      "epochs": 175,
+      "selected_per_policy": 2800,
+      "address": 48,
+      "lru": 48,
+      "learned": 48,
+      "oracle": 48
+    }
+  }
+}
