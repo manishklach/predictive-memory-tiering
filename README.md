@@ -331,3 +331,29 @@ CPU and fault counts cover the query loop in the SQLite worker, including its sc
 The retained configuration uses the 32 KiB buffer and original 5 ms reader wait. Sampling alone reproduced the initial loss. With smaller buffers, sampling throughput rose from 3,991 to 4,198 queries/s, while scoring throughput moved from 4,038 to 3,997. Stock also varied between passes. The median paired scoring throughput difference moved from -9.1% to -6.8%, with individual post-change pairs ranging from -17.1% to +8.4%. These trials establish a smaller buffer footprint and a remaining scoring gap. They do not isolate buffer allocation as the cause of the original loss.
 
 The batched-reader trial at cebd6b4 cut median voluntary context switches from 1,720 to 1,108 and worker CPU from 107 to 99 ms. Its scoring throughput fell to 3,912 queries/s, so the reader change was reverted. With the retained settings, all 48 settled fixture decisions picked the cold range and the SQLite detector scored 75 epochs. Across all 108 timed runs, paired query checksums matched, swap was active, and PMT issued zero page-out requests. No OOM kills were recorded.
+
+### Profiling the live scoring reader on Sydney T0
+
+Two passes used the same c7i.2xlarge, kernel 7.0.14-pmt-damon, 32 KiB per-CPU trace buffer, 5 ms DAMON sampling and 100 ms aggregation. Each pass ran seeds 12345–12356 and each of the six arm orders twice at the same 19,529,728-byte cap. Linux reclaim remained active. PMT page-out was disabled.
+
+| Pass | SQLite arm | Median p99 (ms) | Median queries/s |
+|---|---|---:|---:|
+| Timed wait | Stock Linux | 1.584 | 4,577 |
+| Timed wait | Sampling only | 1.408 | 4,617 |
+| Timed wait | Live scoring | 1.357 | 4,141 |
+| Readiness notification | Stock Linux | 1.534 | 4,748 |
+| Readiness notification | Sampling only | 1.329 | 4,185 |
+| Readiness notification | Live scoring | 1.406 | 3,962 |
+
+| Reader | Wait CPU (ms) | Read CPU (ms) | Decode and score CPU (ms) | Empty reads |
+|---|---:|---:|---:|---:|
+| Timed wait | 8.74 | 1.53 | 1.70 | 57.5 |
+| Readiness notification | 0.79 | 0.35 | 1.52 | 0 |
+
+Reader counters use thread CPU time over the reader lifetime. The SQLite timer covers the query loop and excludes attach and teardown. The original reader attempted a nonblocking read, then waited up to 5 ms after an empty result. The updated reader polls the trace file and a shutdown event descriptor. Both versions apply the same cold score.
+
+To reproduce on the pinned T0 host, build with `make test libpmt-profile.so` and run `sudo /usr/bin/python3 harness/sqlite_limit.py out.json --live-profile --paired-calibration results/sydney-damon/formal/live-profile-before.json` at commits 26f4cc9 and 5bc158d. Run `sudo python3 harness/check_live_sample.py --score` for the phase reversal check. [Before](results/sydney-damon/formal/reader-profile-before.json) · [After](results/sydney-damon/formal/reader-profile-after.json) · [Flip check](results/sydney-damon/formal/reader-profile-flip.json)
+
+Readiness notifications removed the largest measured reader cost. Median wait CPU fell 91%, and voluntary context switches across the SQLite worker fell from 1,724 to 970 per run. The reader stayed active in every timed run, scored 73 epochs, and selected the cold range in all 48 settled fixture decisions. All 72 timed runs passed paired checksums, used swap and recorded zero PMT page-out requests and zero OOM kills.
+
+The CPU saving did not yield a throughput gain. In the second pass, live scoring delivered 5.3% fewer queries/s than sampling only and 16.5% fewer than stock. Its median p99 was 5.7% higher than sampling only and 8.4% lower than stock. Sampling-only throughput also moved from 4,617 to 4,185 queries/s between passes despite identical sampling settings. These separate passes establish a reader CPU reduction; the cause of the remaining end-to-end gap is unresolved.
