@@ -6,6 +6,12 @@ import struct
 import time
 
 
+def pagemap_state(fd, address, page):
+    offset = (address // mmap.PAGESIZE + page) * 8
+    bits, = struct.unpack("=Q", os.pread(fd, 8, offset))
+    return "present" if bits & (1 << 63) else "swapped" if bits & (1 << 62) else "unmapped"
+
+
 class ResidencyFollowup:
     def __init__(self, selector):
         self.selector = selector
@@ -16,15 +22,17 @@ class ResidencyFollowup:
     def sample(self, page):
         selector = self.selector
         present = bool(selector.residency(page * mmap.PAGESIZE, 1)[0] & 1)
-        offset = (selector.address // mmap.PAGESIZE + page) * 8
-        bits, = struct.unpack("=Q", os.pread(self.fd, 8, offset))
-        state = "present" if bits & (1 << 63) else "swapped" if bits & (1 << 62) else "unmapped"
+        state = pagemap_state(self.fd, selector.address, page)
         return dict(mincore_resident=present, pte=state, reread=page in selector.revisited)
 
-    def before(self, page):
+    def before(self, page, skip_swapped=False):
+        record = self.sample(page)
+        if skip_swapped and record["pte"] == "swapped":
+            return False
         stamp = self.selector.last_read[page]
         self.pages[page] = dict(last_read_age_ms=(time.monotonic_ns() - stamp) / 1e6 if stamp else None,
-                                before=self.sample(page))
+                                before=record)
+        return True
 
     def immediate(self, page, when):
         record = self.sample(page)

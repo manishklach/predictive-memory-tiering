@@ -1,5 +1,6 @@
 """Bound cooperative eviction to resident pages within SQLite's private mapping."""
 from array import array
+from contextlib import nullcontext
 import ctypes
 from heapq import nsmallest
 from itertools import islice
@@ -11,7 +12,8 @@ RECENT_NS = 100_000_000
 
 
 class BoundedEviction:
-    def __init__(self, backing, address, libc, protect_recent=True, guard_ns=RECENT_NS, lru=False):
+    def __init__(self, backing, address, libc, protect_recent=True, guard_ns=RECENT_NS, lru=False, skip_swapped=False):
+        self.skip_swapped = skip_swapped
         if lru and not protect_recent:
             raise ValueError('LRU selection requires read history')
         self.lru = lru
@@ -24,7 +26,7 @@ class BoundedEviction:
         self.early = set()
         self.advised = {}
         self.revisited = set()
-        self.stats = dict(recent_skips=0, requests=0, immediately_nonresident=0, reused_within_100ms=0,
+        self.stats = dict(swap_skips=0, recent_skips=0, requests=0, immediately_nonresident=0, reused_within_100ms=0,
                           nonresident_on_early_reuse=0)
 
     def residency(self, offset, pages):
@@ -54,20 +56,35 @@ class BoundedEviction:
                     yield i
 
         eligible = eligible_pages()
-        if self.lru:
+        if self.skip_swapped:
+            # Walk beyond the top K to refill slots rejected by the last-moment PTE check.
+            victims = sorted(eligible, key=self.last_read.__getitem__)
+        elif self.lru:
             # Zero timestamps are unseen pages. nsmallest preserves address order on ties.
             victims = nsmallest(budget, eligible, key=self.last_read.__getitem__)
         else:
             victims = islice(eligible, budget)
-        for i in victims:
-            if self.followup:
-                self.followup.before(i)
-            self.backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * page, page)
-            self.advised[i] = time.monotonic_ns()
-            self.stats["requests"] += 1
-            resident = (self.followup.immediate(i, self.advised[i]) if self.followup
-                        else self.residency(i * page, 1)[0] & 1)
-            self.stats["immediately_nonresident"] += int(not resident)
+        with (open("/proc/self/pagemap", "rb") if self.skip_swapped and not self.followup
+              else nullcontext()) as pagemap:
+            for i in victims:
+                if self.followup:
+                    if not self.followup.before(i, self.skip_swapped):
+                        self.stats["swap_skips"] += 1
+                        continue
+                elif pagemap is not None:
+                    from residency_followup import pagemap_state
+                    if pagemap_state(pagemap.fileno(), self.address, i) == "swapped":
+                        self.stats["swap_skips"] += 1
+                        continue
+                self.backing.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * page, page)
+                self.advised[i] = time.monotonic_ns()
+                self.stats["requests"] += 1
+                resident = (self.followup.immediate(i, self.advised[i]) if self.followup
+                            else self.residency(i * page, 1)[0] & 1)
+                self.stats["immediately_nonresident"] += int(not resident)
+                budget -= 1
+                if budget == 0:
+                    break
 
     def on_read(self, offset, amount):
         now = time.monotonic_ns() if self.last_read is not None else None
