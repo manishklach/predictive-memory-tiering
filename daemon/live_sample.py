@@ -8,7 +8,6 @@ import re
 import select
 import signal
 import tempfile
-import time
 
 ADMIN = Path("/sys/kernel/mm/damon/admin/kdamonds")
 TRACE = Path("/sys/kernel/tracing/instances")
@@ -85,17 +84,16 @@ def main():
     parser.add_argument("--seconds", type=float, default=5)
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, lambda *_: raise_exit())
-    with sampling(args.pid) as records:
-        end = time.monotonic() + args.seconds
-        with open(f"/proc/{args.pid}/stat") as proc:
-            while time.monotonic() < end:
-                proc.seek(0)
-                try:
-                    if not proc.read():
-                        break
-                except ProcessLookupError:
-                    break
-                time.sleep(.05)
+    if args.seconds <= 0:
+        parser.error("--seconds must be positive")
+    pidfd = os.pidfd_open(args.pid)
+    try:
+        poller = select.poll()
+        poller.register(pidfd, select.POLLIN)
+        with sampling(args.pid) as records:
+            poller.poll(int(args.seconds * 1000))
+    finally:
+        os.close(pidfd)
     print(json.dumps(dict(pid=args.pid, fields=["start", "end", "sampled_accesses", "age"],
                           records=records)))
 

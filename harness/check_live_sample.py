@@ -4,14 +4,13 @@ import json
 import mmap
 import os
 from pathlib import Path
-import statistics
 import subprocess
 import sys
 import threading
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "daemon"))
-from live_sample import sampling
+from live_sample import ADMIN, sampling
 
 HALF = 4 << 20
 
@@ -63,8 +62,34 @@ def run():
             target.terminate()
 
 
+def exit_checks():
+    sampler = Path(__file__).resolve().parents[1] / "daemon/live_sample.py"
+    for stop_target in (True, False):
+        with subprocess.Popen(["sleep", "20"]) as target:
+            with subprocess.Popen([sys.executable, sampler, str(target.pid), "--seconds", "15"],
+                                  stdout=subprocess.PIPE, text=True) as reader:
+                try:
+                    state = ADMIN / "0/state"
+                    deadline = time.monotonic() + 5
+                    while not (state.exists() and state.read_text().strip() == "on"):
+                        if reader.poll() is not None or time.monotonic() >= deadline:
+                            raise RuntimeError("sampler did not attach")
+                        time.sleep(.02)
+                    time.sleep(.25)
+                    (target if stop_target else reader).terminate()
+                    stdout, _ = reader.communicate(timeout=3)
+                    if reader.returncode or (stop_target and json.loads(stdout)["pid"] != target.pid):
+                        raise RuntimeError("sampler shutdown failed")
+                    assert (ADMIN / "nr_kdamonds").read_text().strip() == "0"
+                finally:
+                    target.terminate()
+                    if reader.poll() is None:
+                        reader.terminate()
+    return {"target_exit": "passed", "reader_sigterm": "passed"}
+
+
 if __name__ == "__main__":
     if "--child" in sys.argv:
         child()
     else:
-        print(json.dumps(run(), indent=2))
+        print(json.dumps({**run(), "shutdown": exit_checks()}, indent=2))
