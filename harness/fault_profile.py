@@ -36,6 +36,10 @@ class FaultProfile:
             raise OSError(err, os.strerror(err))
         return dict(attributes(reply[20:length]))
 
+    def memory_breakdown(self):
+        stats = dict(line.split() for line in (self.group / "memory.stat").read_text().splitlines())
+        return {key: int(stats[key]) for key in ("anon", "file", "kernel", "pagetables", "slab")}
+
     def snapshot(self):
         stats = dict(line.split() for line in (self.group / "memory.stat").read_text().splitlines())
         result = {key: int(stats[key]) for key in ("pgscan_direct", "pgsteal_direct")}

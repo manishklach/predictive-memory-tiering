@@ -161,6 +161,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
         fault_probe = FaultProfile()
     with context as monitor:
         if fault_probe:
+            memory_at_start = fault_probe.memory_breakdown()
             fault_start = fault_probe.snapshot()
         usage = resource.getrusage(resource.RUSAGE_SELF)
         start = time.perf_counter_ns()
@@ -203,6 +204,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
                           worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
+                          memory_at_query_start=memory_at_start if fault_probe else None,
                           fault_profile={k: v - fault_start[k] for k, v in fault_end.items()} if fault_probe else None,
                           minor_faults=used.ru_minflt - usage.ru_minflt,
                           major_faults=used.ru_majflt - usage.ru_majflt,
