@@ -36,3 +36,5 @@ For the Sydney rehearsal, record Free Tier balance before startup, during comput
 Verify the guest login prompt through an authenticated serial connection. After installing kdump-tools, reboot normally and confirm the running kernel reserved crash memory before testing panic recovery. [Sydney access checkpoint](../results/sydney-recovery-access.json)
 
 For a flattened kdump, reassemble it with makedumpfile -R before extracting dmesg. Verify the expected panic message and a changed guest boot ID. Attach a clone of a boot volume only after reboot is complete. Cloned partitions retain their identifiers. Resolve both disk serials and inspect all mount sources, including /boot/efi, before detaching a restored volume. [Sydney rehearsal](../results/sydney-recovery-crash.json)
+
+The smaller Sydney compatibility run tested commit a98fd49. Capture the host report before loading the module and compare taint before and after unloading. A DAMON-enabled kernel configuration and a repeat with the required signing and leak checks remain open for the formal campaign. [Sydney evidence](../results/sydney-compat-smoke.json)

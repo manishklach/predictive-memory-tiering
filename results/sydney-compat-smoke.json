@@ -1,0 +1,23 @@
+{
+  "scope": "smaller Sydney compatibility rehearsal",
+  "instance_type": "c7i-flex.large",
+  "region": "ap-southeast-2",
+  "source_commit": "a98fd4936751161e7b60dc2e63aae61a8fd5b13b",
+  "kernel": "7.0.0-1018-aws",
+  "userspace_checks_passed": true,
+  "python_tests_passed": 7,
+  "checkpatch_warnings": 0,
+  "module_build": "W=1; compiler executable name differed, same GCC version; BTF skipped because vmlinux unavailable",
+  "synthetic_emitted_at_counter_snapshot": 9,
+  "trace_drops": 0,
+  "self_disables": 3,
+  "load_unload_cycles_completed": 100,
+  "module_unloaded_at_end": true,
+  "taint_before": 0,
+  "taint_after": 12288,
+  "secure_boot": "disabled",
+  "final_instance_state": "stopped",
+  "credit_usd_before": 100,
+  "credit_usd_during": 100,
+  "credit_usd_after_stop": 100
+}
