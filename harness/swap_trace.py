@@ -25,8 +25,8 @@ class SwapTrace:
             raise RuntimeError(f"incomplete swap trace: {header}, {len(lines)} rows")
         result = {}
         for line in lines:
-            i, calls, handler_ns, delay_ns = map(int, line.split())
-            result[self.pages[i]] = dict(calls=calls, handler_ns=handler_ns, swapin_delay_ns=delay_ns)
+            i, calls, handler_ns, delay_ns, offcpu_ns = map(int, line.split())
+            result[self.pages[i]] = dict(calls=calls, handler_ns=handler_ns, swapin_delay_ns=delay_ns, slept_offcpu_ns=offcpu_ns)
         return result
 
 
@@ -53,7 +53,7 @@ def validate():
             assert buf[i * size] == 17 + i
     result = trace.finish()
     assert set(result) == {0, 1} and result[0]["calls"] == 0 and result[1]["calls"] >= 1
-    assert result[1]["handler_ns"] >= result[1]["swapin_delay_ns"] > 0
+    assert result[1]["handler_ns"] >= result[1]["slept_offcpu_ns"] > 0, result
     print(json.dumps(result))
 
 

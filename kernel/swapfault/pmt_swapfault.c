@@ -9,10 +9,11 @@
 #include <linux/module.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
+#include <linux/tracepoint.h>
 
 struct page_sample {
 	unsigned long addr;
-	u64 count, duration, delay;
+	u64 count, duration, delay, offcpu;
 };
 
 struct call_sample {
@@ -23,6 +24,32 @@ struct call_sample {
 static struct page_sample pages[64];
 static unsigned int nr_pages;
 static atomic_t owner = ATOMIC_INIT(0);
+
+static struct tracepoint *switch_tp;
+static struct page_sample *active_page;
+static u64 slept_at;
+
+static void find_switch(struct tracepoint *tp, void *unused)
+{
+	if (!strcmp(tp->name, "sched_switch"))
+		switch_tp = tp;
+}
+
+static void switched(void *unused, bool preempt, struct task_struct *prev,
+		     struct task_struct *next, unsigned int prev_state)
+{
+	struct page_sample *page = READ_ONCE(active_page);
+	int pid = atomic_read(&owner);
+
+	if (!page)
+		return;
+	if (task_pid_nr(prev) == pid && !preempt && prev_state)
+		WRITE_ONCE(slept_at, ktime_get_ns());
+	if (task_pid_nr(next) == pid && READ_ONCE(slept_at)) {
+		page->offcpu += ktime_get_ns() - READ_ONCE(slept_at);
+		WRITE_ONCE(slept_at, 0);
+	}
+}
 
 static int fault_start(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -39,6 +66,7 @@ static int fault_start(struct kretprobe_instance *ri, struct pt_regs *regs)
 		s->page = &pages[i];
 		s->delay = current->delays->swapin_delay;
 		s->start = ktime_get_ns();
+		WRITE_ONCE(active_page, s->page);
 		return 0;
 	}
 	return 1;
@@ -48,6 +76,7 @@ static int fault_end(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	struct call_sample *s = (void *)ri->data;
 
+	WRITE_ONCE(active_page, NULL);
 	s->page->duration += ktime_get_ns() - s->start;
 	s->page->delay += current->delays->swapin_delay - s->delay;
 	s->page->count++;
@@ -70,8 +99,8 @@ static int show(struct seq_file *m, void *unused)
 		return -EPERM;
 	seq_printf(m, "missed %d\n", probe.nmissed);
 	for (i = 0; i < nr_pages; i++)
-		seq_printf(m, "%u %llu %llu %llu\n", i, pages[i].count,
-			   pages[i].duration, pages[i].delay);
+		seq_printf(m, "%u %llu %llu %llu %llu\n", i, pages[i].count,
+			   pages[i].duration, pages[i].delay, pages[i].offcpu);
 	return 0;
 }
 
@@ -88,8 +117,13 @@ static int trace_open(struct inode *inode, struct file *file)
 	ret = single_open(file, show, NULL);
 	if (!ret) {
 		ret = register_kretprobe(&probe);
-		if (!ret)
-			return 0;
+		if (!ret) {
+			ret = tracepoint_probe_register(switch_tp, switched, NULL);
+			if (!ret)
+				return 0;
+			unregister_kretprobe(&probe);
+			probe.kp.addr = NULL;
+		}
 		single_release(inode, file);
 	}
 	atomic_set(&owner, 0);
@@ -115,6 +149,8 @@ static ssize_t mark(struct file *file, const char __user *buf, size_t size,
 
 static int trace_close(struct inode *inode, struct file *file)
 {
+	tracepoint_probe_unregister(switch_tp, switched, NULL);
+	tracepoint_synchronize_unregister();
 	unregister_kretprobe(&probe);
 	probe.kp.addr = NULL;
 	atomic_set(&owner, 0);
@@ -135,6 +171,9 @@ static struct miscdevice dev = {
 
 static int __init start(void)
 {
+	for_each_kernel_tracepoint(find_switch, NULL);
+	if (!switch_tp)
+		return -ENOENT;
 	return misc_register(&dev);
 }
 static void __exit stop(void)
