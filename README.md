@@ -580,3 +580,19 @@ The predictor beat address order on eight seeds, tied on one and lost on three. 
 All seeds share the same database layout, so the address feature may learn layout-specific patterns. This offline comparison uses the observed address-order trajectory and does not measure live throughput, p99, or responses to different eviction choices.
 
 Reproduce with `python harness/page_reuse_predictor.py results/sydney-nvme-pilot/candidate-headroom predictor.json`. [Per-seed results](results/sydney-nvme-pilot/candidate-headroom/predictor.json)
+
+### Live page-level predictor on Sydney NVMe
+
+The frozen predictor reduced 100 ms early reuse by 2.60 percentage points versus address order. LRU had the lowest observed reuse and median p99, and the highest median throughput in this trial.
+
+| Live selector | Reused within 100 ms / advised | Median seed p99 | Median seed throughput |
+|---|---:|---:|---:|
+| Address order | 187/768 (24.35%) | 111.68 µs | 31,826 queries/s |
+| LRU | 160/752 (21.28%) | 110.24 µs | 32,513 queries/s |
+| Predictor | 167/768 (21.74%) | 111.08 µs | 31,562 queries/s |
+
+The Sydney `i7i.2xlarge` ran all three selectors on each of 12 seeds (12345–12356), at 60,000 queries per seed and the paired 19,660,800-byte half-memory cap. Each seed used its own frozen model trained on candidate records from the other 11 seeds. All six arm orders occurred twice. The 100 ms recent-read guard, 16 pages per decision and 64 pages per run applied to every arm. Actual advice volume varied with live decisions. Every advised page had a complete 100 ms observation window. Performance includes pagemap reads and scoring for the predictor. The experiment used the pinned DAMON kernel, instance-store NVMe swap and disabled zswap.
+
+Compared seed by seed, the predictor had lower reuse than address order on six seeds, tied on two and had higher reuse on four. Against LRU it won six, tied one and lost five. The offline advantage over LRU did not carry through to pooled live reuse. This three-selector pilot does not establish a throughput win over stock Linux.
+
+Run with `--predictor-trial --requests 60000 --paired-calibration results/sydney-damon/formal/bounded-pageout.json` in the SQLite harness. [All 36 runs](results/sydney-nvme-pilot/live-predictor/sqlite.json)
