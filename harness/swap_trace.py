@@ -32,28 +32,40 @@ class SwapTrace:
 
 def validate():
     size = mmap.PAGESIZE
-    buf = mmap.mmap(-1, 3 * size, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
+    length = 24 * 1024 * 1024
+    buf = mmap.mmap(-1, length, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
     address = ctypes.addressof(ctypes.c_char.from_buffer(buf))
-    for i in range(3):
-        buf[i * size] = 17 + i
+    for i in range(0, length, size):
+        buf[i] = 17
+    buf.madvise(getattr(mmap, "MADV_PAGEOUT", 21))
+    pressure = bytearray(18 * 1024 * 1024)
+    tagged = list(range(256, 4097, 256))
+    bits = (ctypes.c_ubyte * (length // size))()
+    libc = ctypes.CDLL(None, use_errno=True)
+    for _ in range(100):
+        if libc.mincore(ctypes.c_void_p(address), length, bits):
+            raise OSError(ctypes.get_errno(), "mincore")
+        if all(not (bits[i] & 1) for i in tagged):
+            break
+        time.sleep(.01)
+    else:
+        raise RuntimeError("swapped controls still cached")
+    assert buf[0] == 17
     trace = SwapTrace()
     trace.mark(address, 0)
-    trace.mark(address + size, 1)
     with open("/proc/self/pagemap", "rb") as pm:
-        for i in (1, 2):
-            buf.madvise(getattr(mmap, "MADV_PAGEOUT", 21), i * size, size)
-            for _ in range(100):
-                if pagemap_state(pm.fileno(), address, i) == "swapped":
-                    break
-                time.sleep(.01)
-            else:
-                raise RuntimeError("control failed to swap")
-        time.sleep(.1)
-        for i in (0, 1, 2):
-            assert buf[i * size] == 17 + i
+        for i in tagged:
+            assert pagemap_state(pm.fileno(), address, i) == "swapped"
+            trace.mark(address + i * size, i)
+        assert buf[0] == 17
+        assert buf[128 * size] == 17  # Unregistered negative control.
+        for i in tagged:
+            assert buf[i * size] == 17
     result = trace.finish()
-    assert set(result) == {0, 1} and result[0]["calls"] == 0 and result[1]["calls"] >= 1
-    assert result[1]["handler_ns"] >= result[1]["slept_offcpu_ns"] > 0, result
+    assert set(result) == {0, *tagged} and result[0]["calls"] == 0
+    assert all(result[i]["calls"] >= 1 for i in tagged)
+    assert all(r["handler_ns"] >= r["slept_offcpu_ns"] for r in result.values())
+    assert sum(r["slept_offcpu_ns"] for r in result.values()) > 0, result
     print(json.dumps(result))
 
 
