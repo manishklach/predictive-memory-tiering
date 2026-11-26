@@ -1,5 +1,6 @@
 """Compare stock reclaim and pmtd detector-only on SQLite point queries under memory.max."""
 import resource
+from array import array
 import argparse
 from contextlib import nullcontext
 from itertools import permutations
@@ -33,7 +34,7 @@ from live_sample import sampling
 from region_detector import RegionDetector
 
 
-def worker(db, mode, binary, interval, score_interval, seed):
+def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     profiled = binary is not None
     size = db.stat().st_size
     pages = size // PAGE
@@ -140,8 +141,10 @@ def worker(db, mode, binary, interval, score_interval, seed):
     conn.execute("pragma mmap_size=0")
     conn.execute("pragma cache_size=8")
     rng = random.Random(seed)
-    keys = [rng.randrange(ROWS if i % 2 else 64) for i in range(REQUESTS)]
-    times = []
+    draws = (rng.randrange(ROWS if i % 2 else 64) for i in range(requests))
+    # Compact long-run bookkeeping under the same workload memory cap.
+    keys = array("I", draws) if requests > REQUESTS else list(draws)
+    times = array("Q") if requests > REQUESTS else []
     checksum = 0
     for stage in profile:
         profile[stage] = 0
@@ -201,8 +204,8 @@ def worker(db, mode, binary, interval, score_interval, seed):
         ctl.stdin.close()
         if ctl.wait():
             raise RuntimeError("controller failed")
-    print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
-                          queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
+    print(json.dumps(dict(p99_us=sorted(times)[(99 * requests + 99) // 100 - 1] / 1000,
+                          queries_per_s=requests * 1e9 / elapsed, elapsed_ns=elapsed,
                           worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
                           memory_at_query_start=memory_at_start if fault_probe else None,
                           fault_profile={k: v - fault_start[k] for k, v in fault_end.items()} if fault_probe else None,
@@ -216,7 +219,7 @@ def worker(db, mode, binary, interval, score_interval, seed):
                           profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, bounded_eviction=bounded.stats if bounded else None, pageout_requests=bounded.stats["requests"] if bounded else evictions, checksum=checksum)))
 
 
-def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345):
+def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345, requests=REQUESTS):
     group = Path(tempfile.mkdtemp(prefix="pmt-sql-", dir="/sys/fs/cgroup"))
     try:
         if limit:
@@ -226,7 +229,7 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         def enter():
             (group / "cgroup.procs").write_text(str(os.getpid()))
         raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, str(interval), str(score_interval), str(seed), *([binary] if binary else [])],
-                                      preexec_fn=enter)
+                                      preexec_fn=enter, env={**os.environ, 'PMT_WORKER_REQUESTS': str(requests)})
         return dict(mode=mode, **json.loads(raw), peak_bytes=int((group / "memory.peak").read_text()),
                     swap_peak_bytes=int((group / "memory.swap.peak").read_text()),
                     memory_events=(group / "memory.events").read_text().splitlines())
@@ -234,7 +237,7 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345)
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS):
     bounded_trial = bounded_trial or selection_trial or scoring_trial
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
@@ -254,7 +257,7 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
         if bounded_trial:
             os.environ["PMT_BOUNDED_TRIAL"] = "1"
             os.environ["PMT_DB_SHA256"] = hashlib.sha256(db.read_bytes()).hexdigest()
-        control = run(db, "stock", None)
+        control = run(db, "stock", None, requests=requests)
         if control["swap_peak_bytes"]:
             raise ValueError("calibration swapped")
         limit = control["peak_bytes"] // (2 * PAGE) * PAGE
@@ -320,7 +323,7 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
                 worker_mode, interval, cadence = settings.get(mode, (mode, 16, 1))
-                record = run(db, worker_mode, limit, binary, interval, cadence, seed)
+                record = run(db, worker_mode, limit, binary, interval, cadence, seed, requests)
                 record["mode"] = mode
                 if scoring_sweep or extended or damos:
                     record["score_interval"] = None if mode in ("stock", "damos", "live", "live-score") else cadence
@@ -338,7 +341,7 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
                              zswap_cap_bytes=os.environ.get("PMT_ZSWAP_MAX_BYTES"),
                              zswap_enabled=Path("/sys/module/zswap/parameters/enabled").read_text().strip()
                                 if Path("/sys/module/zswap/parameters/enabled").exists() else None,
-                             apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
+                             apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=requests,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
                              profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
                                  for label, path in ([("inline", ROOT / "libpmt-profile.so")] if stages or settings else
@@ -351,10 +354,12 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--worker"]:
-        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[7] if len(sys.argv) > 7 else None, int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]))
+        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[7] if len(sys.argv) > 7 else None, int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]),
+               int(os.environ.get('PMT_WORKER_REQUESTS', REQUESTS)))
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
+        parser.add_argument("--requests", type=int, default=REQUESTS, help="point queries per seed and arm")
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--scoring-trial", action="store_true", help="matched stock and fixed-range scoring-only runs with opaque SQLite payloads")
@@ -370,4 +375,6 @@ if __name__ == "__main__":
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial)
+        if args.requests < 1:
+            parser.error('--requests must be positive')
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests)
