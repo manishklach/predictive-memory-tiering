@@ -502,3 +502,16 @@ The Sydney i7i.2xlarge used seeds 12345–12356 at 60,000 point queries per seed
 All 48 runs passed query and database-integrity checks, used swap and recorded zero OOM kills. Stock and scoring only issued zero PMT page-out requests. Reproduce at 43dee42 on the pinned 7.0.14-pmt-damon kernel with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --requests 60000 --guard-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Per-seed results](results/sydney-nvme-pilot/guard300/sqlite.json) · [Host and swap verification](results/sydney-nvme-pilot/guard300/host.json) · [fio baseline](results/sydney-nvme-pilot/guard300/fio.json)
 
 The 100 ms control reproduced the previous 25.0% early-reuse rate at 25.3%. The 300 ms guard reduced it to 23.3%, with a lower rate in seven paired seeds, two ties and three increases. It advised fewer pages and produced 126 nonresident early reuses versus 179. Against the 100 ms guard it had 1.1% higher median p99 and 2.9% lower median throughput. We retain the 100 ms default; the longer guard remains available for comparison.
+
+### LRU within a cold region on local NVMe
+
+The Sydney i7i.2xlarge ran both selectors on the same 12 seeds, alternating which selector ran first. Each run issued 60,000 SQLite queries under the same 19,660,800-byte memory cap with exclusive local NVMe swap and zswap off. Both policies kept the 100 ms recent-read guard and the same DAMON scoring, residency checks and 16-page decision / 64-page run bounds. The address-order control takes the first eligible pages. LRU examines the eligible resident pages in the selected region and takes those with the oldest observed SQLite reads, placing never-observed pages first and breaking ties by address. Selection time is included in the timings.
+
+| Selector | Median p99 (µs) | Median queries/s | Early reuse / advised | Early reuse / full-window pages |
+|---|---:|---:|---:|---:|
+| Address order | 100.9 | 36,460 | 188/768 (24.5%) | 188/768 (24.5%) |
+| Region LRU | 99.5 | 36,193 | 165/736 (22.4%) | 165/736 (22.4%) |
+
+Early reuse counts first reads of advised pages within 100 ms after advice. The full-window rate excludes advice made less than 100 ms before query-loop completion. All 24 runs passed query and post-run database integrity checks, used swap and recorded zero OOM kills. Reproduce at 3af2829 with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --lru-trial --requests 60000 --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Per-seed results](results/sydney-nvme-pilot/lru/sqlite.json) · [Host verification](results/sydney-nvme-pilot/lru/host.json) · [fio baseline](results/sydney-nvme-pilot/lru/fio.json)
+
+LRU reduced pooled early reuse from 24.5% to 22.4%. The rate fell in six matched seeds, tied in two and rose in four. Median p99 fell 1.4%, while median throughput fell 0.7%; each selector won six throughput pairs. Of the advised pages, 303/736 under LRU and 686/768 under address order were nonresident immediately after advice. This difference matters when interpreting the decrease in nonresident early reuses (88 versus 180). The trial does not establish a throughput gain. Address order remains the default and region LRU is available for comparison.
