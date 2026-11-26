@@ -8,7 +8,7 @@ When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it
 
 The PID-scoped module emits synthetic sequence numbers through a bounded trace ring. A separate cooperative workload reports page accesses and residency to the C controller. The controller ranks eviction candidates and uses stride or Markov prediction. The workload applies the resulting advice to its own anonymous arena.
 
-PMT can also observe region access in a running Linux process by PID using the DAMON kernel backend and a private tracefs instance. Feeding those live observations to the C controller and validating eviction on local NVMe swap remain open. The replay detector and C controller currently use different scores, so replay cannot validate the controller's eviction decisions. [System design](docs/DESIGN.md) · [Cooperative runtime](docs/LOCAL-RUNTIME.md)
+PMT can also observe region access in a running Linux process by PID using the DAMON kernel backend and a private tracefs instance. The live detector ranks those regions online with the C controller's cold score. Validation of eviction on local NVMe swap remains open. The replay detector and C controller currently use different scores, so replay cannot validate the controller's eviction decisions. [System design](docs/DESIGN.md) · [Cooperative runtime](docs/LOCAL-RUNTIME.md)
 
 ## What would count as a win?
 
@@ -288,3 +288,24 @@ The two arms alternated order across 12 paired seeds (12345–12356), each runni
 Observation had lower p99 in 8/12 rounds and higher throughput in 9/12. The measured medians show no slowdown in this workload. They do not establish that observing accelerates SQLite or quantify the observer's CPU use. [Calibration, per-seed timings and counters](results/sydney-damon/formal/sqlite-live-observe.json)
 
 On the custom T0 kernel, use `sudo python3 daemon/live_sample.py PID --seconds 5` to collect a region trace. Reproduce the checks with `sudo python3 harness/check_live_sample.py` and `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-live.json --live`, with swap active and the DAMON admin interface idle.
+
+### Live cold-region scoring on Sydney T0
+
+On the Sydney c7i.2xlarge running 7.0.14-pmt-damon, PMT scored complete 100 ms DAMON aggregates for one PID in a background thread. A sampled access updates region history. Idle regions become eligible after the cold-score and dwell checks. The detector can abstain. PMT issued no eviction advice or page-out requests.
+
+A process alternated reads between two known 32 MiB ranges over four 1.8 s phases. The detector selected the cold range on all 48 decisions after the first 400 ms of each phase. Within those four transition windows it chose cold five times and abstained seven times. The fixture supplied both address ranges. SQLite used automatic region discovery. [Phase counts](results/sydney-damon/formal/live-detector-flips.json)
+
+| SQLite at 50% memory | Median per-run p99 | Median throughput |
+| --- | ---: | ---: |
+| Stock Linux | 1.651 ms | 4,521 queries/s |
+| Live sampling and PMT scoring | 1.363 ms | 4,080 queries/s |
+
+Across 12 matched seeds with alternating order and 3,000 queries per run, live scoring had 17.4% lower median p99 and 9.7% lower median throughput. It had lower p99 in 10 pairs and higher throughput in five. All 24 runs used swap at the 19,529,728-byte limit, matched the paired query checksum and recorded zero OOM kills. During the timed queries PMT scored 71 epochs and selected a candidate in 43. SQLite timings measure the query loop with monitoring active and exclude attachment and teardown. The short runs establish live operation on EBS-backed T0. Eviction benefit and NVMe performance remain unmeasured. [Per-seed results](results/sydney-damon/formal/sqlite-live-detector.json)
+
+To reproduce on the pinned T0 kernel with swap active and DAMON idle:
+
+```sh
+make libpmt-profile.so pmtd
+sudo python3 harness/check_live_sample.py --score
+sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-live-detector.json --live-score
+```
