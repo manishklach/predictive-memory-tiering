@@ -27,3 +27,20 @@ class RecentReadSelection(unittest.TestCase):
         self.assertEqual(selector.stats["reused_within_100ms"], 2)
         self.assertEqual(selector.stats["full_window_pages"], 1)
         self.assertEqual(selector.stats["full_window_early_reuses"], 0)
+
+    def test_longer_guard_keeps_reuse_metric_at_100ms(self):
+        page = mmap.PAGESIZE
+        backing = MagicMock()
+        backing.__len__.return_value = 2 * page
+        selector = BoundedEviction(backing, page, None, guard_ns=3 * RECENT_NS)
+        selector.residency = lambda offset, pages: [1] * pages
+        with patch("harness.bounded_eviction.time.monotonic_ns", return_value=10**9) as clock:
+            selector.on_read(0, page)
+            clock.return_value += 2 * RECENT_NS
+            selector.apply((page, 3 * page))
+            self.assertEqual(set(selector.advised), {1})
+            clock.return_value += 2 * RECENT_NS
+            selector.on_read(page, page)
+            selector.finish(clock.return_value)
+        self.assertEqual(selector.stats["full_window_pages"], 1)
+        self.assertEqual(selector.stats["reused_within_100ms"], 0)

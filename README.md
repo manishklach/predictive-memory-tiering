@@ -487,3 +487,18 @@ Guarded page-out issued advice in 12/12 seeds. Of 752 advised pages, 662 were no
 Reproduce at ccb9a36 on the pinned 7.0.14-pmt-damon kernel with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --requests 60000 --bounded-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Per-seed results](results/sydney-nvme-pilot/long/sqlite.json) · [Swap verification](results/sydney-nvme-pilot/long/host.json) · [fio baseline](results/sydney-nvme-pilot/long/fio.json)
 
 The longer loop exercised page-out in every seed. Guarded p99 was 23.5% lower than stock and lower in all 12 pairs, while throughput reached 85.6% of stock, below the 95% target. Scoring alone delivered slightly lower median p99 and 6.2% higher median throughput than guarded page-out. Eleven guarded runs reached the 64-page limit, so the measurements cover bounded intervention. This pilot shows that PMT can actuate on local NVMe; it does not establish an incremental performance benefit from eviction on this workload.
+
+### Recent-read guard duration on local NVMe
+
+The Sydney i7i.2xlarge used seeds 12345–12356 at 60,000 point queries per seed and a 19,660,800-byte cap. The protection interval was 100 or 300 ms. Both selectors used the same 32 KiB binary DAMON reader, 100 ms aggregation, ascending-address page selection and limit of 64 distinct advised pages per run. The early-reuse metric remained the first SQLite mapping read within 100 ms after advice. Each of the four arms occupied each run position three times. All swap was on local NVMe, with zswap off.
+
+| Arm | Median p99 (ms) | Median queries/s | Throughput vs stock | Early reuse / advised pages | Early reuse / pages with full window |
+|---|---:|---:|---:|---:|---:|
+| Stock Linux | 0.249 | 38,160 | 100.0% | — | — |
+| Scoring only | 0.108 | 34,169 | 89.5% | — | — |
+| 100 ms guard | 0.109 | 34,374 | 90.1% | 190/752 (25.3%) | 190/752 (25.3%) |
+| 300 ms guard | 0.110 | 33,375 | 87.5% | 165/709 (23.3%) | 165/709 (23.3%) |
+
+All 48 runs passed query and database-integrity checks, used swap and recorded zero OOM kills. Stock and scoring only issued zero PMT page-out requests. Reproduce at 43dee42 on the pinned 7.0.14-pmt-damon kernel with `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --requests 60000 --guard-trial --paired-calibration results/sydney-damon/formal/bounded-pageout.json`. [Per-seed results](results/sydney-nvme-pilot/guard300/sqlite.json) · [Host and swap verification](results/sydney-nvme-pilot/guard300/host.json) · [fio baseline](results/sydney-nvme-pilot/guard300/fio.json)
+
+The 100 ms control reproduced the previous 25.0% early-reuse rate at 25.3%. The 300 ms guard reduced it to 23.3%, with a lower rate in seven paired seeds, two ties and three increases. It advised fewer pages and produced 126 nonresident early reuses versus 179. Against the 100 ms guard it had 1.1% higher median p99 and 2.9% lower median throughput. We retain the 100 ms default; the longer guard remains available for comparison.
