@@ -378,3 +378,21 @@ Before used EBS swap with zswap off. After enabled Linux zswap for all three arm
 Linux alone also benefited from compression. With zswap on, scoring had 3.7% lower median p99 and 14.1% lower throughput than Linux alone. The shorter scored runs each completed two or three 100 ms epochs, 29 total, with five candidate epochs. All 72 timed runs used swap, matched paired query checksums, issued zero PMT page-out requests and recorded zero OOM kills. SQLite rows contain 1,500-byte zero-filled payloads, which favor compression. The compressed-cache result applies to this T0 fixture. Formal NVMe runs retain the zswap-off requirement.
 
 To reproduce on the disposable T0 guest, enable kernel.task_delayacct before starting workers and build with `make test libpmt-profile.so`. Run `PMT_FAULT_PROFILE=1 /usr/bin/python3 harness/sqlite_limit.py before.json --live-profile --paired-calibration results/sydney-damon/formal/live-profile-before.json` as root with zswap off at 327f81b. At 9f1bd56, enable zswap through /sys/module/zswap/parameters/enabled and repeat with PMT_ZSWAP_MAX_BYTES=262144 and a distinct output path. Restore both host settings afterward. The published rerun restored zswap to off before archiving. [Linux delay accounting](https://docs.kernel.org/accounting/delay-accounting.html)
+
+### T1 launch decision after bounded page-out on Sydney T0
+
+T1 remains on hold. The launch criterion required lower median p99 than stock, throughput at least 95% of stock and correct results. Bounded page-out reached 82.4% of stock throughput on the Sydney c7i.2xlarge with EBS swap and zswap off.
+
+| Arm | Median p99 (ms) | Median queries/s | Lower p99 than stock |
+|---|---:|---:|---:|
+| Stock Linux | 1.491 | 4,542 | — |
+| Live scoring, page-out off | 1.401 | 4,225 | 10/12 seeds |
+| Live scoring, bounded page-out | 1.378 | 3,744 | 10/12 seeds |
+
+Each arm ran the same 12 seeds and 3,000 queries per seed at a recalibrated 19,660,800-byte limit. The synthetic 1,500-byte values contain a row identifier and seeded pseudorandom bytes. They model opaque records. The read pattern still alternates between hot keys and uniform point lookups. All 36 runs matched paired checksums, passed a post-timing whole-mapping SHA-256 check, used swap and recorded zero OOM kills.
+
+Both scored arms monitored only the worker's private SQLite backing mapping using DAMON fixed virtual-address ranges and a 32 KiB trace buffer per CPU. At a query boundary the enabled arm consumed the latest region decision and issued MADV_PAGEOUT on up to 16 resident pages in ascending address order, with a cap of 64 distinct pages per run. Selection, advice and reuse accounting are included in the enabled arm's timing.
+
+Across the 12 enabled runs, 656 of 714 advised pages appeared nonresident immediately after advice. SQLite read 317 advised pages again within 100 ms, and 310 were nonresident immediately before that read. The counts cover first reuse during the query loop and have a shorter observation window for late advice. Acting on the score improved median p99 by another 1.6% relative to scoring alone, but cost 11.4% of its throughput. The early reuse makes region-to-page selection a concrete issue to address before another launch decision.
+
+Reproduce on the pinned T0 kernel with swap active and zswap off using `make test libpmt-profile.so` and `sudo /usr/bin/python3 harness/sqlite_limit.py trial.json --bounded-trial`. [Raw per-seed timings and eviction counters](results/sydney-damon/formal/bounded-pageout.json)
