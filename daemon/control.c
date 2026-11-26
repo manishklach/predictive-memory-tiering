@@ -201,6 +201,12 @@ void pmt_policy_destroy(struct policy *policy)
 }
 
 #ifdef PMT_PROFILE
+/* Detector-only SQLite runs retain touch history between ranking passes. */
+void pmt_detector_observe(struct policy *policy, const struct pmt_observation *obs)
+{
+	observe(&policy->history[obs->page], obs, policy->idle_ns);
+}
+
 uint64_t pmt_profile_step(struct policy *policy, const struct pmt_observation *obs,
 			  const unsigned char *resident, struct pmt_advice *advice)
 {

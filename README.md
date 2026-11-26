@@ -171,3 +171,21 @@ The interval controls full-map scans. Every logical read still updates its touch
 Each configuration ran once per round for four rounds in seeded randomized order, using the same 3,000 queries and a fresh cgroup capped at 19,406,848 bytes (50% of the calibrated stock peak rounded down to a page). All 28 runs passed query checks, used swap and recorded zero OOM kills. [Raw runs, counters, and timings](results/sqlite-sampling-50.json)
 
 Reproduce with `make pmtd libpmt-profile.so` followed by `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-sampling.json --sampling-sweep`.
+
+### Scoring cadence with residency sampled every 256 observations
+
+Scoring every 64 logical page observations had the best median p99 and throughput among the four detector configurations. Every detector run updated touch history on all 7,258 observations and refreshed its residency map 29 times. The scoring interval controls how often the in-process detector ranks eviction candidates and can request page-out. Prefetch was disabled.
+
+| Mode | Scoring calls per run | Page-out requests per run (range) | Median query p99 (ms) | Median queries/s |
+| --- | ---: | ---: | ---: | ---: |
+| Stock Linux | 0 | 0 | 0.848 | 8,980 |
+| Score every observation | 7,258 | 5,301–6,543 | 1.122 | 4,589 |
+| Score every 4 observations | 1,815 | 1,797–1,804 | 0.833 | 6,299 |
+| Score every 16 observations | 454 | 449–451 | 0.942 | 6,596 |
+| Score every 64 observations | 114 | 111–112 | 0.773 | 8,065 |
+
+At interval 64, throughput increased 76% and p99 fell 31% relative to scoring every observation. Compared with stock, throughput was 10% lower and median p99 was 9% lower. Interval 64 had lower p99 than stock in three of four rounds, with overlapping run ranges. The measured change includes both fewer scoring passes and fewer page-out requests.
+
+The WSL2 benchmark ran four seeded, randomized rounds at a common 19,406,848-byte RAM limit, half the calibrated stock peak rounded down to a page. Each run checked the same 3,000 query results, used swap, and recorded zero OOM kills. [Raw runs and counters](results/sqlite-scoring-50.json)
+
+Reproduce with `make pmtd libpmt-profile.so` followed by `sudo /usr/bin/python3 harness/sqlite_limit.py /tmp/sqlite-scoring.json --scoring-sweep`.

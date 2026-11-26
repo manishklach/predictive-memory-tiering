@@ -24,7 +24,7 @@ REQUESTS = 3000
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def worker(db, mode, binary, interval):
+def worker(db, mode, binary, interval, score_interval):
     profiled = binary is not None
     size = db.stat().st_size
     pages = size // PAGE
@@ -36,6 +36,7 @@ def worker(db, mode, binary, interval):
     bitmap = ctypes.create_string_buffer(pages)
     reads = evictions = eviction_advice = refreshes = 0
     profile = dict(residency=0, controller_round_trip=0, pageout=0, scoring=0, pipe_path=0, inline_path=0)
+    score_calls = history_only_calls = 0
     ctl = None
     inline = mode in ("scoring-only", "detector-inline")
     observe = mode != "stock"
@@ -45,6 +46,8 @@ def worker(db, mode, binary, interval):
         lib.pmt_policy_create.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint64,
                                           ctypes.c_uint64, ctypes.c_int]
         lib.pmt_policy_create.restype = ptr
+        lib.pmt_detector_observe.argtypes = [ptr, ptr]
+        lib.pmt_detector_observe.restype = None
         lib.pmt_profile_step.argtypes = [ptr, ptr, ptr, ptr]
         lib.pmt_profile_step.restype = ctypes.c_uint64
         lib.pmt_policy_destroy.argtypes = [ptr]
@@ -61,6 +64,7 @@ def worker(db, mode, binary, interval):
 
     class File(apsw.VFSFile):
         def xRead(self, amount, offset):
+            nonlocal score_calls, history_only_calls
             nonlocal reads, evictions, eviction_advice, refreshes
             data = backing[offset:offset + amount]
             for page in range(offset // PAGE, (offset + amount + PAGE - 1) // PAGE):
@@ -79,6 +83,11 @@ def worker(db, mode, binary, interval):
                         continue
                     if inline:
                         struct.pack_into("=QII", observation, 0, time.monotonic_ns(), page, 0)
+                        if (reads - 1) % score_interval:
+                            lib.pmt_detector_observe(policy, observation)
+                            history_only_calls += 1
+                            continue
+                        score_calls += 1
                         scoring = lib.pmt_profile_step(policy, observation, bitmap, advice)
                         victim, fetch = advice
                     else:
@@ -140,17 +149,18 @@ def worker(db, mode, binary, interval):
             raise RuntimeError("controller failed")
     print(json.dumps(dict(p99_us=sorted(times)[(99 * REQUESTS + 99) // 100 - 1] / 1000,
                           queries_per_s=REQUESTS * 1e9 / elapsed, elapsed_ns=elapsed,
+                          inline_score_calls=score_calls, history_only_calls=history_only_calls,
                           profile_ns=profile, reads=reads, residency_scans=refreshes, eviction_advice=eviction_advice, pageout_requests=evictions, checksum=checksum)))
 
 
-def run(db, mode, limit, binary=None, interval=16):
+def run(db, mode, limit, binary=None, interval=16, score_interval=1):
     group = Path(tempfile.mkdtemp(prefix="pmt-sql-", dir="/sys/fs/cgroup"))
     try:
         if limit:
             (group / "memory.max").write_text(str(limit))
         def enter():
             (group / "cgroup.procs").write_text(str(os.getpid()))
-        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, str(interval), *([binary] if binary else [])],
+        raw = subprocess.check_output([sys.executable, __file__, "--worker", db, mode, str(interval), str(score_interval), *([binary] if binary else [])],
                                       preexec_fn=enter)
         return dict(mode=mode, **json.loads(raw), peak_bytes=int((group / "memory.peak").read_text()),
                     swap_peak_bytes=int((group / "memory.swap.peak").read_text()),
@@ -159,7 +169,7 @@ def run(db, mode, limit, binary=None, interval=16):
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep):
+def main(output, baseline, stages, sweep, scoring_sweep):
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "app.db"
         setup = sqlite3.connect(db)
@@ -180,20 +190,27 @@ def main(output, baseline, stages, sweep):
             modes = ("stock", "observation-only", "scoring-only", "detector-inline")
             orders = [tuple(modes[(i + j) % 4] for j in (0, 1, 3, 2)) for i in range(4)]
         settings = {}
+        if scoring_sweep:
+            settings["stock"] = ("stock", 256, 1)
+            for cadence in (1, 4, 16, 64):
+                settings[f"score-every-{cadence}"] = ("detector-inline", 256, cadence)
         if sweep:
-            settings["stock"] = ("stock", 16)
+            settings["stock"] = ("stock", 16, 1)
             for mode in ("observation-only", "detector-inline"):
                 for interval in (16, 64, 256):
-                    settings[f"{mode}-{interval}"] = (mode, interval)
+                    settings[f"{mode}-{interval}"] = (mode, interval, 1)
+        if settings:
             rng = random.Random(1207)
             orders = [rng.sample(list(settings), len(settings)) for _ in range(4)]
         for pair, order in enumerate(orders):
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
-                worker_mode, interval = settings.get(mode, (mode, 16))
-                record = run(db, worker_mode, limit, binary, interval)
+                worker_mode, interval, cadence = settings.get(mode, (mode, 16, 1))
+                record = run(db, worker_mode, limit, binary, interval, cadence)
                 record["mode"] = mode
-                if sweep:
+                if scoring_sweep:
+                    record["score_interval"] = None if mode == "stock" else cadence
+                if settings:
                     record["refresh_interval"] = None if mode == "stock" else interval
                 assert record["checksum"] == control["checksum"]
                 runs.append(dict(pair=pair + 1, **record))
@@ -203,7 +220,7 @@ def main(output, baseline, stages, sweep):
                              apsw=apsw.apswversion(), pages=db.stat().st_size // PAGE, requests=REQUESTS,
                              controller_sha256=hashlib.sha256((ROOT / "pmtd").read_bytes()).hexdigest(),
                              profile_binary_sha256={str(label): hashlib.sha256(path.read_bytes()).hexdigest()
-                                 for label, path in ([("inline", ROOT / "libpmt-profile.so")] if stages or sweep else
+                                 for label, path in ([("inline", ROOT / "libpmt-profile.so")] if stages or settings else
                                                      [("before", baseline), ("after", ROOT / "libpmt-profile.so")]
                                                      if baseline else [])},
                              calibration=control, memory_max_bytes=limit, runs=runs, median=summary),
@@ -213,13 +230,14 @@ def main(output, baseline, stages, sweep):
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--worker"]:
-        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[5] if len(sys.argv) > 5 else None, int(sys.argv[4]))
+        worker(Path(sys.argv[2]), sys.argv[3], sys.argv[6] if len(sys.argv) > 6 else None, int(sys.argv[4]), int(sys.argv[5]))
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("output", type=Path)
         group = parser.add_mutually_exclusive_group()
+        group.add_argument("--scoring-sweep", action="store_true", help="rank every 1, 4, 16 or 64 observations at residency interval 256")
         group.add_argument("--sampling-sweep", action="store_true", help="compare refresh intervals of 16, 64 and 256 observations")
         group.add_argument("--stages", action="store_true", help="compare observation, scoring and page-out")
         group.add_argument("--profile-baseline", type=Path, help="prior instrumented pmtd binary")
         args = parser.parse_args()
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep)
