@@ -47,3 +47,12 @@ class BanditTest(unittest.TestCase):
             schedule.step(30001,t+WINDOW_NS+1,detector,t)
             self.assertEqual(selector.target_pages,24)
             self.assertEqual(actions,[(100,200)])
+
+    def test_constant_target_preserves_allowance_and_counts_work_left(self):
+        selector = SimpleNamespace(advised={1: 0}, followup=SimpleNamespace(confirmed=1),
+                                   swap_trace=SimpleNamespace(snapshot=lambda: {}))
+        schedule = TrialSchedule(selector, "bandit", 13, 60000, constant_target=True)
+        self.assertEqual(selector.target_pages, 24)
+        schedule.step(30001, 500, SimpleNamespace(decisions=[]), 100)
+        self.assertEqual(selector.target_pages, 24)
+        self.assertEqual((schedule.mid_advised, schedule.mid_confirmed), (1, 1))

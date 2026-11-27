@@ -746,3 +746,30 @@ All-run stall is pooled sleeping time on advised pages, with unequal realized re
 Redis exploitation decisions favored filtered LRU 19 to 14 before the flip and cost-aware 50 to 36 afterward. The flip coincided with the increased reclaim allowance, and second-half sleep includes later faults on first-half advice. These counts describe the controller's actions without isolating the effect of the flip. The 100 ms learning window also differs from the whole-run stall metric.
 
 [SQLite per-seed results](results/sydney-nvme-pilot/delayed-bandit/sqlite-summary.json) · [Redis per-seed results](results/sydney-nvme-pilot/delayed-bandit/redis-summary.json) · [Raw trials and repeated probe controls](results/sydney-nvme-pilot/delayed-bandit/) · [Protocol](docs/EXPERIMENT.md#delayed-two-arm-bandit-trial)
+
+### Redis hot-set flip with constant reclaim allowance
+
+The full 96 KiB allowance was available from operation one in both conditions. Each of the 12 seeds (32345–32356) ran all three policies in both conditions on the Sydney NVMe pilot, with 60,000 server-side GETRANGE operations and one shared 29,933,568-byte half-memory cap. The flip moved only the hot half of the request stream from pages 0–63 to 4096–4159 after operation 30,000. The control kept its original hot set. Both conditions used the same policy order per seed; which condition ran first alternated by seed. The analyzer regenerated both halves of every request stream, verified their hashes and reply checksums, and checked matured bandit feedback against final trace counters.
+
+| Policy | Condition | Seeds reaching 96 KiB | Total tagged stall (ms) | Median seed p99 (µs) | Median throughput (ops/s) |
+|---|---|---:|---:|---:|---:|
+| Bandit | No flip | 9/12 | 25.60 | 93.01 | 49,887 |
+| Bandit | Flip | 8/12 | 26.26 | 93.73 | 52,747 |
+| Filtered LRU | No flip | 8/12 | 23.31 | 92.87 | 52,359 |
+| Filtered LRU | Flip | 7/12 | 24.70 | 92.64 | 52,717 |
+| Fixed cost-aware | No flip | 9/12 | 27.09 | 93.53 | 50,463 |
+| Fixed cost-aware | Flip | 10/12 | 24.98 | 92.88 | 53,591 |
+
+Across all runs, realized reclaim differed. For each policy, restricting to the same seeds that reached 96 KiB under both conditions gives the following comparison. The columns show no flip → flip; each row uses its own matched seeds.
+
+| Policy | Paired seeds | Total tagged stall (ms) | Median p99 (µs) | Median ops/s |
+|---|---:|---:|---:|---:|
+| Bandit | 5 | 11.405 → 11.822 | 93.37 → 94.04 | 50,711 → 52,801 |
+| Filtered LRU | 4 | 9.428 → 11.118 | 94.62 → 94.12 | 51,676 → 52,004 |
+| Fixed cost-aware | 7 | 16.481 → 15.523 | 93.83 → 92.85 | 50,266 → 52,471 |
+
+Among flip runs three seeds hit the target with every policy; tagged stall totaled 6.596 ms for bandit, 7.952 ms for LRU and 7.460 ms for cost-aware. Five no-flip seeds matched across policies; corresponding totals were 11.437, 10.715 and 12.115 ms. Only seed 32349 qualified in all six conditions. The differing subsets limit evidence of an interaction between workload change and policy.
+
+Five bandit flip runs had already reached the full target by the midpoint. The bandit issued advice after the midpoint in seven flip runs and eight no-flip runs. Among post-midpoint exploitation decisions, it selected LRU/cost 22/21 times with the flip and 6/20 without it. These are batch counts with unequal opportunities. Pre-flip execution also varied despite identical request streams. The results do not establish that adapting to the flip reduced stall consistently.
+
+Reproduce with the Redis driver option `--flip-control` and `python3 harness/summarize_flip_control.py redis.json.gz summary.json`. [Per-seed and phase comparisons](results/sydney-nvme-pilot/redis-flip-control/summary.json) · [Raw records](results/sydney-nvme-pilot/redis-flip-control/redis.json.gz)
