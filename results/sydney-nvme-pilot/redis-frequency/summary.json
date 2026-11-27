@@ -1,0 +1,401 @@
+{
+  "target_bytes": 98304,
+  "summary": {
+    "bounded-frequency-faulttrace": {
+      "target_met": 9,
+      "confirmed_bytes": 1101824,
+      "advised": 282,
+      "slept_ms": 30.325541,
+      "present_before_slept_ms": 30.325541,
+      "p99_us": 96.654,
+      "queries_per_s": 38621.5526146006
+    },
+    "bounded-noswap-faulttrace": {
+      "target_met": 11,
+      "confirmed_bytes": 1081344,
+      "advised": 360,
+      "slept_ms": 35.896692,
+      "present_before_slept_ms": 35.896692,
+      "p99_us": 99.37700000000001,
+      "queries_per_s": 38071.68712465838
+    },
+    "bounded-age-faulttrace": {
+      "target_met": 10,
+      "confirmed_bytes": 1134592,
+      "advised": 303,
+      "slept_ms": 34.702963,
+      "present_before_slept_ms": 34.702963,
+      "p99_us": 96.77950000000001,
+      "queries_per_s": 37788.89402290774
+    }
+  },
+  "seeds": {
+    "bounded-frequency-faulttrace": [
+      {
+        "seed": 52345,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2234120,
+        "present_before_slept_ns": 2234120,
+        "p99_us": 96.441,
+        "queries_per_s": 37330.17186596479
+      },
+      {
+        "seed": 52346,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2305853,
+        "present_before_slept_ns": 2305853,
+        "p99_us": 95.649,
+        "queries_per_s": 35933.54239380461
+      },
+      {
+        "seed": 52347,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2989124,
+        "present_before_slept_ns": 2989124,
+        "p99_us": 97.118,
+        "queries_per_s": 40628.608759994466
+      },
+      {
+        "seed": 52348,
+        "confirmed_bytes": 32768,
+        "advised": 8,
+        "slept_ns": 627152,
+        "present_before_slept_ns": 627152,
+        "p99_us": 98.891,
+        "queries_per_s": 46828.05834702706
+      },
+      {
+        "seed": 52349,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 2992310,
+        "present_before_slept_ns": 2992310,
+        "p99_us": 109.191,
+        "queries_per_s": 37373.278075654394
+      },
+      {
+        "seed": 52350,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2630140,
+        "present_before_slept_ns": 2630140,
+        "p99_us": 94.463,
+        "queries_per_s": 41020.64194869391
+      },
+      {
+        "seed": 52351,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2759786,
+        "present_before_slept_ns": 2759786,
+        "p99_us": 98.09,
+        "queries_per_s": 34317.398225629906
+      },
+      {
+        "seed": 52352,
+        "confirmed_bytes": 94208,
+        "advised": 24,
+        "slept_ns": 2785895,
+        "present_before_slept_ns": 2785895,
+        "p99_us": 95.697,
+        "queries_per_s": 41114.30807214855
+      },
+      {
+        "seed": 52353,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2633358,
+        "present_before_slept_ns": 2633358,
+        "p99_us": 94.51,
+        "queries_per_s": 37137.41676949388
+      },
+      {
+        "seed": 52354,
+        "confirmed_bytes": 90112,
+        "advised": 24,
+        "slept_ns": 2670638,
+        "present_before_slept_ns": 2670638,
+        "p99_us": 99.539,
+        "queries_per_s": 40283.87328450647
+      },
+      {
+        "seed": 52355,
+        "confirmed_bytes": 98304,
+        "advised": 27,
+        "slept_ns": 2668527,
+        "present_before_slept_ns": 2668527,
+        "p99_us": 96.867,
+        "queries_per_s": 39501.2957201855
+      },
+      {
+        "seed": 52356,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 3028638,
+        "present_before_slept_ns": 3028638,
+        "p99_us": 94.436,
+        "queries_per_s": 37741.80950901569
+      }
+    ],
+    "bounded-noswap-faulttrace": [
+      {
+        "seed": 52345,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2527544,
+        "present_before_slept_ns": 2527544,
+        "p99_us": 99.558,
+        "queries_per_s": 37728.65572059557
+      },
+      {
+        "seed": 52346,
+        "confirmed_bytes": 98304,
+        "advised": 30,
+        "slept_ns": 2913019,
+        "present_before_slept_ns": 2913019,
+        "p99_us": 106.135,
+        "queries_per_s": 37222.33275049281
+      },
+      {
+        "seed": 52347,
+        "confirmed_bytes": 98304,
+        "advised": 44,
+        "slept_ns": 2703948,
+        "present_before_slept_ns": 2703948,
+        "p99_us": 99.196,
+        "queries_per_s": 40492.16957970529
+      },
+      {
+        "seed": 52348,
+        "confirmed_bytes": 98304,
+        "advised": 36,
+        "slept_ns": 4012192,
+        "present_before_slept_ns": 4012192,
+        "p99_us": 108.741,
+        "queries_per_s": 38795.50940530268
+      },
+      {
+        "seed": 52349,
+        "confirmed_bytes": 98304,
+        "advised": 39,
+        "slept_ns": 4321631,
+        "present_before_slept_ns": 4321631,
+        "p99_us": 108.562,
+        "queries_per_s": 37157.25088160501
+      },
+      {
+        "seed": 52350,
+        "confirmed_bytes": 98304,
+        "advised": 28,
+        "slept_ns": 3312539,
+        "present_before_slept_ns": 3312539,
+        "p99_us": 100.563,
+        "queries_per_s": 36669.864938946914
+      },
+      {
+        "seed": 52351,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2486283,
+        "present_before_slept_ns": 2486283,
+        "p99_us": 97.473,
+        "queries_per_s": 35998.30077940797
+      },
+      {
+        "seed": 52352,
+        "confirmed_bytes": 98304,
+        "advised": 28,
+        "slept_ns": 3225536,
+        "present_before_slept_ns": 3225536,
+        "p99_us": 96.567,
+        "queries_per_s": 38414.7185287212
+      },
+      {
+        "seed": 52353,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2644417,
+        "present_before_slept_ns": 2644417,
+        "p99_us": 96.343,
+        "queries_per_s": 40340.07091247944
+      },
+      {
+        "seed": 52354,
+        "confirmed_bytes": 98304,
+        "advised": 41,
+        "slept_ns": 3801939,
+        "present_before_slept_ns": 3801939,
+        "p99_us": 106.848,
+        "queries_per_s": 39447.13833663887
+      },
+      {
+        "seed": 52355,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2572368,
+        "present_before_slept_ns": 2572368,
+        "p99_us": 95.361,
+        "queries_per_s": 36675.11558639454
+      },
+      {
+        "seed": 52356,
+        "confirmed_bytes": 0,
+        "advised": 16,
+        "slept_ns": 1375276,
+        "present_before_slept_ns": 1375276,
+        "p99_us": 93.495,
+        "queries_per_s": 41035.0307385345
+      }
+    ],
+    "bounded-age-faulttrace": [
+      {
+        "seed": 52345,
+        "confirmed_bytes": 73728,
+        "advised": 24,
+        "slept_ns": 2562832,
+        "present_before_slept_ns": 2562832,
+        "p99_us": 92.956,
+        "queries_per_s": 42964.15622822118
+      },
+      {
+        "seed": 52346,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 2657113,
+        "present_before_slept_ns": 2657113,
+        "p99_us": 99.101,
+        "queries_per_s": 36607.043294701056
+      },
+      {
+        "seed": 52347,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3417212,
+        "present_before_slept_ns": 3417212,
+        "p99_us": 95.203,
+        "queries_per_s": 38585.89248220099
+      },
+      {
+        "seed": 52348,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 2251348,
+        "present_before_slept_ns": 2251348,
+        "p99_us": 96.281,
+        "queries_per_s": 36880.596399615744
+      },
+      {
+        "seed": 52349,
+        "confirmed_bytes": 98304,
+        "advised": 26,
+        "slept_ns": 3005528,
+        "present_before_slept_ns": 3005528,
+        "p99_us": 100.775,
+        "queries_per_s": 38297.21884320187
+      },
+      {
+        "seed": 52350,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 1942100,
+        "present_before_slept_ns": 1942100,
+        "p99_us": 95.918,
+        "queries_per_s": 43166.876512004834
+      },
+      {
+        "seed": 52351,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3012381,
+        "present_before_slept_ns": 3012381,
+        "p99_us": 100.837,
+        "queries_per_s": 37110.97775088829
+      },
+      {
+        "seed": 52352,
+        "confirmed_bytes": 98304,
+        "advised": 29,
+        "slept_ns": 3079659,
+        "present_before_slept_ns": 3079659,
+        "p99_us": 94.573,
+        "queries_per_s": 37280.56920261362
+      },
+      {
+        "seed": 52353,
+        "confirmed_bytes": 77824,
+        "advised": 24,
+        "slept_ns": 2690708,
+        "present_before_slept_ns": 2690708,
+        "p99_us": 94.09,
+        "queries_per_s": 40967.444788475084
+      },
+      {
+        "seed": 52354,
+        "confirmed_bytes": 98304,
+        "advised": 24,
+        "slept_ns": 3774024,
+        "present_before_slept_ns": 3774024,
+        "p99_us": 114.745,
+        "queries_per_s": 35543.20193913189
+      },
+      {
+        "seed": 52355,
+        "confirmed_bytes": 98304,
+        "advised": 25,
+        "slept_ns": 3160113,
+        "present_before_slept_ns": 3160113,
+        "p99_us": 159.357,
+        "queries_per_s": 34652.65955497566
+      },
+      {
+        "seed": 52356,
+        "confirmed_bytes": 98304,
+        "advised": 27,
+        "slept_ns": 3149945,
+        "present_before_slept_ns": 3149945,
+        "p99_us": 97.278,
+        "queries_per_s": 40076.88060221188
+      }
+    ]
+  },
+  "matched_seeds": [
+    52346,
+    52347,
+    52349,
+    52350,
+    52351,
+    52355
+  ],
+  "matched": {
+    "noswap": {
+      "stall_ms": 18.309788,
+      "p99_us": 99.87950000000001,
+      "ops_per_s": 36916.18323399978
+    },
+    "age": {
+      "stall_ms": 17.194447,
+      "p99_us": 99.938,
+      "ops_per_s": 37704.09829704508
+    },
+    "frequency": {
+      "stall_ms": 16.34574,
+      "p99_us": 96.9925,
+      "ops_per_s": 38437.28689791995
+    }
+  },
+  "comparisons": {
+    "noswap": {
+      "lower": 3,
+      "nonties": 6,
+      "p": 0.65625
+    },
+    "age": {
+      "lower": 5,
+      "nonties": 6,
+      "p": 0.109375
+    }
+  }
+}

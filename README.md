@@ -6,6 +6,18 @@ In the original matched-cost trial on SQLite, all three selectors reached the 96
 
 When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it when the workload faults. A workload with predictable reuse may tolerate a smaller DRAM tier if software can identify pages that will stay cold and fetch swapped pages before their next access. The vision is to make the DRAM budget a tunable resource for workloads with that access pattern, while preserving the stock Linux fault path.
 
+### Does read frequency improve Redis reclaim at the same page age?
+
+The Sydney NVMe pilot collected pre-advice age, preceding-second read count (capped at four), 10 ms reclaim and tagged swap-fault sleep for each training advice event. Count varied within three age buckets. We froze age-only and age-plus-frequency tables on the same 12 training seeds, widened the stable Redis hot set from 64 to 256 pages, and ran each ranking on 12 fresh seeds. Each run used 60,000 requests, a calibrated half-memory cap and the same 96 KiB cumulative reclaim target.
+
+| Ranking | Target hits across 12 seeds | Tagged sleep on six matched seeds | Median matched p99 | Median matched throughput |
+|---|---:|---:|---:|---:|
+| Filtered LRU | 11 | 18.31 ms | 99.88 µs | 36,916 requests/s |
+| Age only | 10 | 17.19 ms | 99.94 µs | 37,704 requests/s |
+| Age plus frequency | 9 | 16.35 ms | 96.99 µs | 38,437 requests/s |
+
+**The trial was inconclusive on paired stall.** Six seeds hit the target under all three rankings, below the preregistered minimum of eight. Frequency also missed the target more often than either control. Its lower pooled sleep on the matched subset is descriptive. [Protocol](docs/EXPERIMENT.md#preregistered-redis-read-frequency-trial) · [Training events, frozen tables, held-out runs and verification](results/sydney-nvme-pilot/redis-frequency/)
+
 ### Redis replay with randomized run order
 
 This Sydney NVMe pilot reused the previous experiment's 12 seed-specific hot-set boundaries (14,464–24,064 completed requests). The six policy and workload combinations ran in randomized, position-balanced order, each appearing twice in every position. The boundary was fixed before each run, independent of the new bandit's feedback. Each isolated Redis process served 60,000 requests with a 29,671,424-byte memory limit.
