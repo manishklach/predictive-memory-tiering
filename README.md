@@ -6,6 +6,21 @@ On SQLite, all three selectors reached the 96 KiB reclaim target on all 12 seeds
 
 When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it when the workload faults. A workload with predictable reuse may tolerate a smaller DRAM tier if software can identify pages that will stay cold and fetch swapped pages before their next access. The vision is to make the DRAM budget a tunable resource for workloads with that access pattern, while preserving the stock Linux fault path.
 
+### Redis replay with randomized run order
+
+This Sydney NVMe pilot reused the previous experiment's 12 seed-specific hot-set boundaries (14,464–24,064 completed requests). The six policy and workload combinations ran in randomized, position-balanced order, each appearing twice in every position. The boundary was fixed before each run, independent of the new bandit's feedback. Each isolated Redis process served 60,000 requests with a 29,671,424-byte memory limit.
+
+| Hot set | Policy | 96 KiB target hits | Tagged fault stall (ms) | Median p99 (µs) | Median requests/s |
+|---|---|---:|---:|---:|---:|
+| Flip | Filtered LRU | 9/12 | 6.35 | 86.26 | 55,299 |
+| Flip | Fixed cost-aware | 9/12 | 5.98 | 86.62 | 55,241 |
+| Flip | Bandit | 10/12 | 5.98 | 86.78 | 53,932 |
+| Stable | Filtered LRU | 7/12 | 6.59 | 86.42 | 56,261 |
+| Stable | Fixed cost-aware | 7/12 | 5.61 | 86.36 | 56,572 |
+| Stable | Bandit | 9/12 | 6.06 | 86.65 | 54,356 |
+
+Target hits use all 12 seeds. Stall totals and whole-run latency and throughput medians use the 3 seeds that reached the same 96 KiB target in every condition. Reclaim counts pages that were present before advice and nonresident at their individual 10 ms checks. Stall counts off-CPU sleep in tagged page faults. [Raw runs, per-seed results and tracer validation](results/sydney-nvme-pilot/redis-randomized-flip/)
+
 ### Redis hot-set flip after both bandit arms received feedback
 
 On the Sydney `i7i.2xlarge` NVMe pilot, each of 12 seeds ran 60,000 Redis requests per condition under a 29,929,472-byte cgroup limit. Every 128 completed requests, the flip-bandit checked for mature 100 ms outcomes from both arms, an available advice slot and unreserved reclaim capacity. All 12 seeds qualified between requests 14,464 and 24,064 with 14–20 reclaim slots free. The bandit advised 298 additional pages across those 12 runs. Each seed's other five runs used the same boundary. The flip-bandit always ran first to establish it, which leaves a run-order confound.

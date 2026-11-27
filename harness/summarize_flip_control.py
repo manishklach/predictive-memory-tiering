@@ -21,6 +21,20 @@ def summarize_control(data):
         runs = [r for r in data["runs"] if r["pattern"] == pattern]
         conditions[pattern] = analyze(dict(data, runs=runs))
         indexed[pattern] = {(r["mode"], r["query_seed"]): r for r in runs}
+    boundaries = data.get("recorded_boundaries", {})
+    if boundaries:
+        source = Path(__file__).resolve().parents[1] / "results/sydney-nvme-pilot/redis-feedback-flip/summary.json"
+        expected = {seed: event["completed"] for seed, event in json.loads(source.read_text())["triggers"].items()}
+        if boundaries != expected:
+            raise ValueError("boundaries differ from the original feedback-triggered run")
+        for rows in indexed.values():
+            for mode in {key[0] for key in rows}:
+                positions = sorted(row["position"] for (policy, _), row in rows.items() if policy == mode)
+                if positions != sorted(list(range(1, 7)) * 2):
+                    raise ValueError("condition order is unbalanced")
+        for i, row in enumerate(data["runs"]):
+            if row["position"] != i % 6 + 1 or row["query_seed"] != 32345 + i // 6:
+                raise ValueError("recorded order differs from execution order")
     triggers = {}
     for seed in range(32345, 32357):
         if data.get("recorded_boundaries"):
@@ -90,7 +104,7 @@ def summarize_control(data):
                     stall_ms=sum(p["slept_offcpu_ns"] for r in rows for p in r["swap_faults"].values()) / 1e6,
                     p99_us=median(r["p99_us"] for r in rows),
                     ops_per_s=median(r["queries_per_s"] for r in rows))
-    return dict(triggers=triggers, flip_after=data.get("flip_after", 30000), memory_max_bytes=data["memory_max_bytes"], conditions=conditions, paired=paired,
+    return dict(recorded_boundaries=boundaries, triggers=triggers, flip_after=data.get("flip_after", 30000), memory_max_bytes=data["memory_max_bytes"], conditions=conditions, paired=paired,
                 six_way_matched_seeds=shared, six_way_matched=six_way)
 
 
