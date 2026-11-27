@@ -2,7 +2,7 @@
 
 **Can a memory-bound Linux workload use half its usual DRAM and still keep tail latency under control?** PMT is an experimental Linux kernel and userspace project that studies this question using local NVMe swap on AWS EC2.
 
-On SQLite, all three selectors reached the 96 KiB reclaim target on all 12 seeds. The cost-aware selector recorded less swap-fault stall than filtered LRU on six of them. On Redis, it reached the target on 12/12 seeds, compared with 11/12 for filtered LRU and 10/12 for idle-only. [Read the technical blog: What does it cost to reclaim 96 KiB?](docs/PAGE-RECLAIM-BENCHMARKS.md)
+In the original matched-cost trial on SQLite, all three selectors reached the 96 KiB reclaim target on all 12 seeds. The cost-aware selector recorded less swap-fault stall than filtered LRU on six of them. On Redis, it reached the target on 12/12 seeds, compared with 11/12 for filtered LRU and 10/12 for idle-only. [Read the technical blog: What does it cost to reclaim 96 KiB?](docs/PAGE-RECLAIM-BENCHMARKS.md)
 
 When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it when the workload faults. A workload with predictable reuse may tolerate a smaller DRAM tier if software can identify pages that will stay cold and fetch swapped pages before their next access. The vision is to make the DRAM budget a tunable resource for workloads with that access pattern, while preserving the stock Linux fault path.
 
@@ -764,6 +764,8 @@ All 72 runs used fresh seeds 32345–32356, 60,000 operations, a 100 ms guard an
 | Redis | Filtered LRU | 5/12 | 21.61 ms | 93.17 µs | 53,608 ops/s |
 | Redis | Fixed cost-aware | 11/12 | 24.98 ms | 93.62 µs | 51,556 ops/s |
 | Redis | Bandit | 12/12 | 24.52 ms | 94.41 µs | 51,121 ops/s |
+
+The fixed cost-aware ranking reached 96 KiB on 12/12 SQLite seeds in the original matched-cost trial and 4/12 here. This trial changed seeds, staged the reclaim allowance, limited each batch to two pages and accepted DAMON region decisions for up to 100 ms. Those choices change when and how many pages a ranking can advise. The runs do not isolate which change explains the eight additional misses.
 
 All-run stall is pooled sleeping time on advised pages, with unequal realized reclaim. On the four fully matched Redis seeds (32351, 32352, 32355, 32356), the bandit totaled 8.045 ms versus 7.652 ms for fixed cost-aware and 8.706 ms for filtered LRU. The bandit beat each comparator on two of those four paired seeds. Matched-subset p99 and throughput were 94.37 µs and 51,121 ops/s for the bandit, 93.57 µs and 51,668 ops/s for fixed cost-aware, and 94.47 µs and 52,242 ops/s for filtered LRU. On SQLite, five seeds reached the target under both bandit and filtered LRU (16.655 versus 15.004 ms); none reached it under both bandit and fixed cost-aware. All misses are retained.
 
