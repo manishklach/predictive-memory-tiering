@@ -32,8 +32,11 @@ class ResidencyFollowup:
         if skip_swapped and record["pte"] == "swapped":
             return False
         stamp = self.selector.last_read[page]
-        self.pages[page] = dict(last_read_age_ms=(time.monotonic_ns() - stamp) / 1e6 if stamp else None,
+        now = time.monotonic_ns()
+        self.pages[page] = dict(last_read_age_ms=(now - stamp) / 1e6 if stamp else None,
                                 before=record)
+        if self.selector.read_history is not None:
+            self.pages[page]["recent_reads"] = self.selector.read_history.count(page, now)
         return True
 
     def immediate(self, page, when):

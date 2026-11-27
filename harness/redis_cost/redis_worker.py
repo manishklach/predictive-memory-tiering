@@ -46,12 +46,24 @@ def run(address, pages):
         selector.skip_swapped = True
     if mode in ("cost", "idle", "bandit"):
         selector.idle_risk = json.loads((directory / ("cost-frozen.json" if mode == "bandit" else f"{mode}-frozen.json")).read_text())
+    if os.environ.get("PMT_FREQUENCY") == "1":
+        from frequency_model import ReadHistory
+        selector.read_history = ReadHistory(pages)
+        selector.skip_swapped = True
+        if mode == "training":
+            selector.training_rng = random.Random(seed)
+        if mode in ("age", "frequency"):
+            model = json.loads((directory / "frequency-model.json").read_text())
+            selector.idle_risk = model["age"]
+            if mode == "frequency":
+                selector.frequency_table = model["joint"]
     selector.target_pages = 24
     detector = RegionDetector()
     traced = mode != "calibration"
     monitor = sampling(os.getpid(), [(address, address + len(obj))], detector, buffer_kb=32) if traced else nullcontext()
     rng = random.Random(seed)
-    draws = array("I", (rng.randrange(pages if i % 2 else 64) for i in range(60000)))
+    hot_pages = int(os.environ.get("PMT_HOT_PAGES", 64))
+    draws = array("I", (rng.randrange(pages if i % 2 else hot_pages) for i in range(60000)))
     boundary = int(os.environ.get('PMT_FLIP_AFTER', 30000))
     anchor = os.environ.get("PMT_FEEDBACK_ANCHOR") == "1"
     trigger = None

@@ -18,6 +18,9 @@ class BoundedEviction:
             raise ValueError('LRU selection requires read history')
         self.lru = lru
         self.followup = None
+        self.read_history = None
+        self.training_rng = None
+        self.frequency_table = None
         self.capture = None
         self.predictor = None
         self.swap_trace = None
@@ -79,7 +82,10 @@ class BoundedEviction:
         if self.capture:
             eligible = list(eligible)
             snapshot = self.capture.epoch(self, eligible, budget)
-        if self.predictor and self.capture:
+        if self.training_rng is not None:
+            victims = list(eligible)
+            self.training_rng.shuffle(victims)
+        elif self.predictor and self.capture:
             def snapshot_risk(row):
                 i, stamp, pte = row
                 features = dict(page=i, last_read_ns=stamp, pte=pte)
@@ -102,7 +108,11 @@ class BoundedEviction:
             def idle_score(i):
                 stamp = self.last_read[i]
                 age = ((now - stamp) // RECENT_NS).bit_length() if stamp else -1
-                return table.get(str(age), table["fallback"]), i
+                score = table.get(str(age), table["fallback"])
+                if self.frequency_table is not None:
+                    count = self.read_history.count(i, now)
+                    score = self.frequency_table.get(f"{age}/{count}", score)
+                return score, i
             victims = sorted(eligible, key=idle_score) if self.skip_swapped else nsmallest(budget, eligible, key=idle_score)
         elif self.lru:
             # Zero timestamps are unseen pages. nsmallest preserves address order on ties.
@@ -147,6 +157,8 @@ class BoundedEviction:
             self.capture.read(offset, amount, now)
         for i in range(offset // mmap.PAGESIZE, (offset + amount - 1) // mmap.PAGESIZE + 1):
             if self.last_read is not None:
+                if self.read_history is not None:
+                    self.read_history.record(i, now)
                 self.last_read[i] = now
             if i in self.advised and i not in self.revisited:
                 self.revisited.add(i)

@@ -68,3 +68,11 @@ A bandit batch becomes eligible for feedback after 100 ms and after its 10 ms re
 The planned comparison uses seeds 32345–32356, 60,000 operations per seed, every arm order twice, and a half-memory cap per workload. Redis moves its 64-page hot set from offsets 0–63 to 4096–4159 after operation 30,000. Uniform random reads continue over the whole string. Compare all runs for target attainment, throughput and p99, and compare sleep on seeds meeting the same target in all arms. Report the two halves separately. The criterion for a win is lower paired stall than the better fixed policy over the whole run with comparable target attainment. The kernel probe must be rebuilt and both controls must pass before timing.
 
 Use `--bandit-trial` in the SQLite matched-cost command above and `PMT_BANDIT_TRIAL=1` for the Redis driver. The summary command is `python3 harness/summarize_bandit.py trial.json.gz summary.json`.
+
+### Preregistered Redis read-frequency trial
+
+Train on Redis seeds 42345–42356 with a stable 64-page hot set. Sample eligible victims in seeded random order. Each page receives advice at most once per worker. Join its pre-advice features, 10 ms reclaim observation and full tagged fault sleep by worker and page. The frequency feature counts reads in the preceding second, saturated at four. Require count variation within at least one age bucket. Fit both tables on exactly those events with the same shrinkage and freeze before evaluation.
+
+Evaluate seeds 52345–52356 with a stable 256-page hot set, 60,000 requests, a calibrated half-memory limit, the same residency and swap-entry checks, 100 ms guard and constant 96 KiB cumulative target. Use filtered LRU, age only and age plus frequency. All three pay for read tracking. Balance the six possible orders equally across seeds.
+
+Count target hits on all 12 seeds. Interpret paired tagged stall only if at least eight seeds hit in all three arms. Claim a win only if frequency reaches target at least as often as each control, pooled matched stall falls against each, and each one-sided paired exact sign test for lower stall has p ≤ 0.05 (ties omitted). Report median whole-run p99 and throughput. A missed floor is inconclusive.
