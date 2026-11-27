@@ -1,4 +1,5 @@
 """Summarize delayed-bandit trials and check feedback against final kernel counters."""
+from collections import Counter
 import gzip
 import json
 from pathlib import Path
@@ -33,6 +34,22 @@ def analyze(data):
             group[phase] = dict(slept_ms=sum(p["stall_ns"] for p in items)/1e6,
                                 p99_us=median(p["p99_us"] for p in items),
                                 ops_per_s=median(p["ops_per_s"] for p in items))
+    matched = set.intersection(*[{r["seed"] for r in rows if r["confirmed_bytes"] == report["target_bytes"]}
+                                 for rows in report["seeds"].values()])
+    report["matched_seeds"] = sorted(matched)
+    report["matched"] = {}
+    for mode, rows in report["seeds"].items():
+        selected = [r for r in rows if r["seed"] in matched]
+        if selected:
+            report["matched"][mode] = dict(slept_ms=sum(r["slept_ns"] for r in selected)/1e6,
+                p99_us=median(r["p99_us"] for r in selected),
+                ops_per_s=median(r["queries_per_s"] for r in selected))
+    choices = {"first": Counter(), "second": Counter()}
+    for run in data["runs"]:
+        for batch in run["phases"]["decisions"]:
+            phase = "first" if batch["query"] <= data["requests"] // 2 else "second"
+            choices[phase][batch["arm"] + "_" + batch["reason"]] += 1
+    report["bandit_batch_counts"] = choices
     return report
 
 

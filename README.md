@@ -719,3 +719,30 @@ The transfer test used Redis 7.0.15 under a separately calibrated 28,086,272-byt
 Nine Redis seeds reached the full target with every policy. Within those same nine seeds, confirmed bytes were identical and tagged sleep totaled 22.78 ms for filtered LRU, 19.99 ms for idle-only and 21.26 ms for cost-aware. Idle-only fell short on seeds 22348 and 22352; filtered LRU reached its 64-advice limit on seed 22356. All runs are retained. The fully matched subset is descriptive and excludes policy-dependent failures. The transfer result supports target attainment for the cost-aware selector on this fixture. It does not establish consistently lower stall than both baselines across workloads.
 
 [Redis per-seed results](results/sydney-nvme-pilot/matched-cost/redis-summary.json) · [Raw Redis records](results/sydney-nvme-pilot/matched-cost/redis.json.gz) · [Reproduction instructions](docs/EXPERIMENT.md#reproducing-the-matched-byte-comparison)
+
+### Delayed bandit versus its fixed rankings
+
+On the Sydney NVMe pilot the bandit reached 96 KiB on all 12 Redis hot-set-flip seeds, but it did not beat the better fixed ranker on the four seeds where all three policies reached that target. SQLite had no three-way fully matched seed. These trials do not establish a stall win at equal reclaim.
+
+All 72 runs used fresh seeds 32345–32356, 60,000 operations, a 100 ms guard and the swap-entry filter. Each workload used its half-memory cap (SQLite 19,660,800 bytes; Redis 29,929,472 bytes). The cumulative confirmed-reclaim allowance increased from 48 KiB to 96 KiB halfway through the run for every policy. Redis switched the 64-page hot range at operation 30,001. Batch sleep feedback was checked against the final kernel counters; only mature observations informed subsequent choices.
+
+| Workload | Ranking | Seeds reaching 96 KiB | Tagged stall, all runs | Median seed p99 | Median throughput |
+|---|---|---:|---:|---:|---:|
+| SQLite | Filtered LRU | 9/12 | 36.52 ms | 113.61 µs | 30,398 ops/s |
+| SQLite | Fixed cost-aware | 4/12 | 24.12 ms | 112.04 µs | 31,854 ops/s |
+| SQLite | Bandit | 8/12 | 29.82 ms | 113.38 µs | 29,591 ops/s |
+| Redis | Filtered LRU | 5/12 | 21.61 ms | 93.17 µs | 53,608 ops/s |
+| Redis | Fixed cost-aware | 11/12 | 24.98 ms | 93.62 µs | 51,556 ops/s |
+| Redis | Bandit | 12/12 | 24.52 ms | 94.41 µs | 51,121 ops/s |
+
+All-run stall is pooled sleeping time on advised pages, with unequal realized reclaim. On the four fully matched Redis seeds (32351, 32352, 32355, 32356), the bandit totaled 8.045 ms versus 7.652 ms for fixed cost-aware and 8.706 ms for filtered LRU. The bandit beat each comparator on two of those four paired seeds. Matched-subset p99 and throughput were 94.37 µs and 51,121 ops/s for the bandit, 93.57 µs and 51,668 ops/s for fixed cost-aware, and 94.47 µs and 52,242 ops/s for filtered LRU. On SQLite, five seeds reached the target under both bandit and filtered LRU (16.655 versus 15.004 ms); none reached it under both bandit and fixed cost-aware. All misses are retained.
+
+| Redis ranking | Stall before / after flip | Median p99 before / after | Median ops/s before / after |
+|---|---:|---:|---:|
+| Filtered LRU | 4.57 / 17.04 ms | 95.19 / 92.05 µs | 41,450 / 75,774 |
+| Fixed cost-aware | 8.36 / 16.62 ms | 95.64 / 92.18 µs | 39,798 / 72,497 |
+| Bandit | 6.82 / 17.70 ms | 97.05 / 92.16 µs | 39,313 / 72,204 |
+
+Redis exploitation decisions favored filtered LRU 19 to 14 before the flip and cost-aware 50 to 36 afterward. The flip coincided with the increased reclaim allowance, and second-half sleep includes later faults on first-half advice. These counts describe the controller's actions without isolating the effect of the flip. The 100 ms learning window also differs from the whole-run stall metric.
+
+[SQLite per-seed results](results/sydney-nvme-pilot/delayed-bandit/sqlite-summary.json) · [Redis per-seed results](results/sydney-nvme-pilot/delayed-bandit/redis-summary.json) · [Raw trials and repeated probe controls](results/sydney-nvme-pilot/delayed-bandit/) · [Protocol](docs/EXPERIMENT.md#delayed-two-arm-bandit-trial)
