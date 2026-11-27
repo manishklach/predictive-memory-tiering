@@ -773,3 +773,21 @@ Among flip runs three seeds hit the target with every policy; tagged stall total
 Five bandit flip runs had already reached the full target by the midpoint. The bandit issued advice after the midpoint in seven flip runs and eight no-flip runs. Among post-midpoint exploitation decisions, it selected LRU/cost 22/21 times with the flip and 6/20 without it. These are batch counts with unequal opportunities. Pre-flip execution also varied despite identical request streams. The results do not establish that adapting to the flip reduced stall consistently.
 
 Reproduce with the Redis driver option `--flip-control` and `python3 harness/summarize_flip_control.py redis.json.gz summary.json`. [Per-seed and phase comparisons](results/sydney-nvme-pilot/redis-flip-control/summary.json) · [Raw records](results/sydney-nvme-pilot/redis-flip-control/redis.json.gz)
+
+### Early Redis hot-set flip
+
+Moving the flip to operation 6,001 preserved the entire 96 KiB reclaim target. In all 72 runs, every advice request occurred after the boundary. This exposed each selector to the new hot set with reclaim work remaining, but the bandit had no pre-flip eviction feedback to adapt from.
+
+The Sydney pilot used the same 12 seeds (32345–32356), 60,000 operations per run, and a shared calibrated 30,191,616-byte cap. The no-flip control retained pages 0–63 as its hot set; the flip changed those offsets to 4096–4159 after the first 6,000 operations. The uniform reads, page budgets, and frozen fixed-cost table were common. The analyzer verified the paired streams and reply checksums for all six conditions, including the new phase boundary.
+
+| Policy | Target hits, no flip → flip | Tagged sleep, ms | Median p99, µs | Median ops/s |
+|---|---:|---:|---:|---:|
+| Bandit | 8/12 → 9/12 | 23.73 → 26.87 | 92.29 → 92.45 | 54,792 → 54,740 |
+| Filtered LRU | 9/12 → 8/12 | 23.04 → 22.95 | 91.79 → 92.44 | 56,204 → 56,409 |
+| Fixed cost-aware | 10/12 → 10/12 | 26.73 → 23.24 | 92.53 → 92.23 | 53,885 → 54,963 |
+
+These are all-run totals for tagged sleep and medians across seeds for performance. Target misses mean the stall totals include differences in reclaimed bytes. On the five flip seeds where all three policies reached 96 KiB, pooled sleep was 11.64 ms for bandit, 9.82 ms for filtered LRU and 9.22 ms for fixed cost-aware. Their matched median p99 values were 92.37, 92.68 and 92.35 µs, and median throughputs were 51,855, 56,019 and 54,492 ops/s. On four fully matched no-flip seeds, sleep was 9.15, 7.28 and 8.10 ms respectively. No seed reached the full target in all six conditions.
+
+Within-policy paired comparisons use seeds reaching the target in both patterns. The bandit had six such seeds (14.00 → 13.32 ms, no flip → flip), filtered LRU six (12.54 → 12.93 ms) and fixed cost-aware nine (20.46 → 17.99 ms). The early flip did not yield a matched-stall advantage for the bandit over the fixed selectors. Testing a learned response to a change requires both mature feedback before the change and remaining decisions afterward.
+
+Reproduce with `--flip-control --flip-after 6000`. In the summary, the historical field names containing `midpoint` refer to the configured boundary of 6,000 operations. [Per-seed, phase and matched comparisons](results/sydney-nvme-pilot/redis-early-flip/summary.json) · [Raw records](results/sydney-nvme-pilot/redis-early-flip/redis.json.gz)

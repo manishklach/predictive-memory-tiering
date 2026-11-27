@@ -56,3 +56,16 @@ class BanditTest(unittest.TestCase):
         schedule.step(30001, 500, SimpleNamespace(decisions=[]), 100)
         self.assertEqual(selector.target_pages, 24)
         self.assertEqual((schedule.mid_advised, schedule.mid_confirmed), (1, 1))
+
+    def test_early_flip_counts_at_6001_and_splits_latencies_at_6000(self):
+        selector = SimpleNamespace(advised={1: 0}, followup=SimpleNamespace(confirmed=1),
+                                   bandit=None, swap_trace=SimpleNamespace(snapshot=lambda: {}))
+        schedule = TrialSchedule(selector, "cost", 13, 60000, constant_target=True, phase_boundary=6000)
+        detector = SimpleNamespace(decisions=[])
+        schedule.step(6000, 100, detector, 0)
+        self.assertEqual(schedule.mid_ns, 0)
+        schedule.step(6001, 6000, detector, 0)
+        schedule.step(30001, 30000, detector, 0)
+        result = schedule.report([1000]*6000 + [2000]*54000, 60000, {})
+        self.assertEqual((result["first"]["p99_us"], result["second"]["p99_us"]), (1, 2))
+        self.assertEqual((schedule.mid_ns, selector.target_pages), (6000, 24))
