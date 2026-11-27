@@ -14,6 +14,7 @@ from summarize_bandit import analyze
 def summarize_control(data):
     if not data["constant_target"] or len(data["runs"]) != 72:
         raise ValueError("expected 72 constant-target runs")
+    boundary = data.get('flip_after', 30000)
     conditions = {}
     indexed = {}
     for pattern in ("flip", "no-flip"):
@@ -23,12 +24,12 @@ def summarize_control(data):
     for seed in range(32345, 32357):
         rng = random.Random(seed)
         stream = array("I", (rng.randrange(8192 if i % 2 else 64) for i in range(60000)))
-        prefix = hashlib.sha256(stream[:30000]).hexdigest()
+        prefix = hashlib.sha256(stream[:boundary]).hexdigest()
         for pattern in ("no-flip", "flip"):
             if pattern == "flip":
-                for i in range(30000, len(stream), 2):
+                for i in range(boundary, len(stream), 2):
                     stream[i] += 4096
-            suffix = hashlib.sha256(stream[30000:]).hexdigest()
+            suffix = hashlib.sha256(stream[boundary:]).hexdigest()
             checksum = sum(page % 251 for page in stream)
             for mode in conditions[pattern]["summary"]:
                 r = indexed[pattern][mode, seed]
@@ -68,7 +69,7 @@ def summarize_control(data):
                     stall_ms=sum(p["slept_offcpu_ns"] for r in rows for p in r["swap_faults"].values()) / 1e6,
                     p99_us=median(r["p99_us"] for r in rows),
                     ops_per_s=median(r["queries_per_s"] for r in rows))
-    return dict(memory_max_bytes=data["memory_max_bytes"], conditions=conditions, paired=paired,
+    return dict(flip_after=boundary, memory_max_bytes=data["memory_max_bytes"], conditions=conditions, paired=paired,
                 six_way_matched_seeds=shared, six_way_matched=six_way)
 
 

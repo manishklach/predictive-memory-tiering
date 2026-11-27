@@ -47,7 +47,7 @@ def analyze(data):
     choices = {"first": Counter(), "second": Counter()}
     for run in data["runs"]:
         for batch in run["phases"]["decisions"]:
-            phase = "first" if batch["query"] <= data["requests"] // 2 else "second"
+            phase = "first" if batch["query"] <= data.get("flip_after", data["requests"] // 2) else "second"
             choices[phase][batch["arm"] + "_" + batch["reason"]] += 1
     report["bandit_batch_counts"] = choices
     return report

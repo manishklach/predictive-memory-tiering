@@ -53,7 +53,12 @@ def arm(server, module, directory, mode, seed, cap, pattern="flip"):
         group.rmdir()
 
 
-def main(server, module, output, flip_control=False):
+def main(server, module, output, flip_control=False, flip_after=30000):
+    if not 0 < flip_after < 60000 or flip_after % 2:
+        raise ValueError('flip-after must be an even operation count between 0 and 60000')
+    if flip_after != 30000 and not flip_control:
+        raise ValueError('custom boundary requires --flip-control')
+    os.environ['PMT_FLIP_AFTER'] = str(flip_after)
     if flip_control:
         os.environ.update(PMT_BANDIT_TRIAL="1", PMT_CONSTANT_TARGET="1")
     with tempfile.TemporaryDirectory() as tmp:
@@ -81,7 +86,7 @@ def main(server, module, output, flip_control=False):
                     row["pattern"] = pattern
                 runs.extend(rows)
         output.write_text(json.dumps(dict(version=subprocess.check_output([server,"--version"],
-            text=True).strip(), constant_target=flip_control, calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
+            text=True).strip(), flip_after=flip_after, constant_target=flip_control, calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
 
 
 if __name__ == "__main__":
@@ -90,4 +95,5 @@ if __name__ == "__main__":
     for key in ("server", "module", "output"):
         parser.add_argument(key, type=Path)
     parser.add_argument("--flip-control", action="store_true")
+    parser.add_argument("--flip-after", type=int, default=30000)
     main(**vars(parser.parse_args()))

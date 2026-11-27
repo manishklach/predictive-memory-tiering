@@ -57,9 +57,12 @@ class BatchBandit:
 
 class TrialSchedule:
     """Use the latest DAMON decision for at most 100 ms, paced at 25 ms."""
-    def __init__(self, selector, mode, seed, operations, constant_target=False):
+    def __init__(self, selector, mode, seed, operations, constant_target=False, phase_boundary=None):
         self.selector = selector
         self.operations = operations
+        self.phase_boundary = operations // 2 if phase_boundary is None else phase_boundary
+        if not 0 < self.phase_boundary < operations:
+            raise ValueError('phase boundary outside workload')
         self.consumed = 0
         self.region = None
         self.region_ns = self.last_attempt = 0
@@ -73,7 +76,7 @@ class TrialSchedule:
     def step(self, query, now, detector, start):
         s = self.selector
         s.query = query
-        if query == self.operations // 2 + 1:
+        if query == self.phase_boundary + 1:
             self.mid_advised = len(s.advised)
             self.mid_confirmed = s.followup.confirmed if s.followup else 0
             self.mid_sleep = sum(p["slept_offcpu_ns"] for p in s.swap_trace.snapshot().values())
@@ -88,7 +91,7 @@ class TrialSchedule:
 
     def report(self, times, elapsed, faults):
         total = sum(p["slept_offcpu_ns"] for p in faults.values())
-        mid = self.operations // 2
+        mid = self.phase_boundary
         def phase(samples, duration, sleep):
             count = len(samples)
             return dict(stall_ns=sleep, p99_us=sorted(samples)[(99*count+99)//100-1]/1000,
