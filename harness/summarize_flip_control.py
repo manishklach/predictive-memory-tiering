@@ -23,6 +23,8 @@ def summarize_control(data):
         indexed[pattern] = {(r["mode"], r["query_seed"]): r for r in runs}
     triggers = {}
     for seed in range(32345, 32357):
+        if data.get("recorded_boundaries"):
+            boundary = data["recorded_boundaries"][str(seed)]
         if data.get("feedback_flip"):
             anchor = indexed["flip"]["bounded-bandit-faulttrace", seed]
             boundary = anchor["boundary"]

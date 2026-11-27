@@ -56,7 +56,28 @@ def arm(server, module, directory, mode, seed, cap, pattern="flip", boundary=Non
         group.rmdir()
 
 
-def main(server, module, output, flip_control=False, flip_after=30000, feedback_flip=False):
+def balanced_orders():
+    """Randomized complete blocks with two appearances per condition per position."""
+    rng = random.Random(20261127)
+    orders = []
+    for _ in range(2):
+        cells = [(pattern, mode) for pattern in ("flip", "no-flip")
+                 for mode in ("bandit", "noswap", "cost")]
+        rng.shuffle(cells)
+        orders.extend(cells[i:] + cells[:i] for i in range(6))
+    rng.shuffle(orders)
+    return orders
+
+
+def main(server, module, output, flip_control=False, flip_after=30000, feedback_flip=False,
+         recorded_flip=False):
+    boundaries = {}
+    if recorded_flip:
+        if not flip_control or feedback_flip or flip_after != 30000:
+            raise ValueError("recorded flip requires paired controls without a live or fixed override")
+        source = HERE.parents[1] / "results/sydney-nvme-pilot/redis-feedback-flip/summary.json"
+        boundaries = {seed: event["completed"] for seed, event in json.loads(source.read_text())["triggers"].items()}
+        schedule = balanced_orders()
     if feedback_flip and not flip_control:
         raise ValueError("feedback flip requires paired controls")
     if not 0 < flip_after < 60000 or flip_after % 2:
@@ -80,6 +101,12 @@ def main(server, module, output, flip_control=False, flip_after=30000, feedback_
         runs = []
         for i, order in enumerate(orders):
             seed = first_seed + i
+            if recorded_flip:
+                for position, (pattern, mode) in enumerate(schedule[i], 1):
+                    row = arm(server, module, directory, mode, seed, cap, pattern, boundaries[str(seed)])
+                    row.update(pattern=pattern, position=position)
+                    runs.append(row)
+                continue
             patterns = ("flip", "no-flip") if flip_control else ("flip",)
             if i % 2:
                 patterns = patterns[::-1]
@@ -103,7 +130,7 @@ def main(server, module, output, flip_control=False, flip_after=30000, feedback_
                     row["pattern"] = pattern
                 runs.extend(rows)
         output.write_text(json.dumps(dict(version=subprocess.check_output([server,"--version"],
-            text=True).strip(), feedback_flip=feedback_flip, flip_after=None if feedback_flip else flip_after, constant_target=flip_control, calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
+            text=True).strip(), recorded_boundaries=boundaries, feedback_flip=feedback_flip, flip_after=None if feedback_flip or recorded_flip else flip_after, constant_target=flip_control, calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
 
 
 if __name__ == "__main__":
@@ -112,6 +139,7 @@ if __name__ == "__main__":
     for key in ("server", "module", "output"):
         parser.add_argument(key, type=Path)
     parser.add_argument("--flip-control", action="store_true")
+    parser.add_argument("--recorded-flip", action="store_true")
     parser.add_argument("--feedback-flip", action="store_true")
     parser.add_argument("--flip-after", type=int, default=30000)
     main(**vars(parser.parse_args()))
