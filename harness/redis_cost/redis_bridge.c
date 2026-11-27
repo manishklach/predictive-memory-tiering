@@ -6,7 +6,11 @@
 #include <string.h>
 
 #define PAGE_BYTES 4096
-#define PAGES 8192
+#ifndef PMT_REDIS_PAGES
+#define PMT_REDIS_PAGES 8192
+#endif
+_Static_assert(PMT_REDIS_PAGES > 0 && PMT_REDIS_PAGES <= 65536,
+               "Redis fixture must fit within 256 MiB plus alignment padding");
 
 static RedisModuleCtx *active;
 static size_t displacement;
@@ -14,7 +18,7 @@ static size_t displacement;
 /* Called only by the embedded driver on the server command thread. */
 int pmt_getrange(int page)
 {
-	if (!active || page < 0 || page >= PAGES)
+	if (!active || page < 0 || page >= PMT_REDIS_PAGES)
 		return -1;
 	long long begin = displacement + page * (long long)PAGE_BYTES;
 	RedisModuleCallReply *reply = RedisModule_Call(active, "GETRANGE", "cll",
@@ -37,21 +41,21 @@ static int bench(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 	RedisModuleKey *key = RedisModule_OpenKey(ctx, name, REDISMODULE_READ | REDISMODULE_WRITE);
 	if (RedisModule_KeyType(key) != REDISMODULE_KEYTYPE_EMPTY)
 		return RedisModule_ReplyWithError(ctx, "benchmark requires an empty fixture");
-	if (RedisModule_StringTruncate(key, (PAGES + 1) * PAGE_BYTES) != REDISMODULE_OK)
+	if (RedisModule_StringTruncate(key, (PMT_REDIS_PAGES + 1) * PAGE_BYTES) != REDISMODULE_OK)
 		return RedisModule_ReplyWithError(ctx, "string allocation failed");
 	size_t length;
 	char *base = RedisModule_StringDMA(key, &length, REDISMODULE_WRITE);
-	if (!base || length != (PAGES + 1) * PAGE_BYTES)
+	if (!base || length != (PMT_REDIS_PAGES + 1) * PAGE_BYTES)
 		return RedisModule_ReplyWithError(ctx, "invalid Redis value");
 	displacement = (-(uintptr_t)base) & (PAGE_BYTES - 1);
 	char *aligned = base + displacement;
-	for (int i = 0; i < PAGES; ++i)
+	for (int i = 0; i < PMT_REDIS_PAGES; ++i)
 		memset(aligned + i * PAGE_BYTES, i % 251, PAGE_BYTES);
 	RedisModule_CloseKey(key);
 	active = ctx;
 	PyObject *driver = PyImport_ImportModule("redis_worker");
 	PyObject *result = driver ? PyObject_CallMethod(driver, "run", "Ki",
-					 (unsigned long long)(uintptr_t)aligned, PAGES) : NULL;
+					 (unsigned long long)(uintptr_t)aligned, PMT_REDIS_PAGES) : NULL;
 	active = NULL;
 	Py_XDECREF(driver);
 	if (!result) {

@@ -76,3 +76,14 @@ Train on Redis seeds 42345–42356 with a stable 64-page hot set. Sample eligibl
 Evaluate seeds 52345–52356 with a stable 256-page hot set, 60,000 requests, a calibrated half-memory limit, the same residency and swap-entry checks, 100 ms guard and constant 96 KiB cumulative target. Use filtered LRU, age only and age plus frequency. All three pay for read tracking. Balance the six possible orders equally across seeds.
 
 Count target hits on all 12 seeds. Interpret paired tagged stall only if at least eight seeds hit in all three arms. Claim a win only if frequency reaches target at least as often as each control, pooled matched stall falls against each, and each one-sided paired exact sign test for lower stall has p ≤ 0.05 (ties omitted). Report median whole-run p99 and throughput. A missed floor is inconclusive.
+
+
+### Remaining NVMe pilot work
+
+The PMT pilot closes with a larger-pressure Redis comparison. KV-cache tiering by attention heat belongs to a separate inference project with token-level metrics and its own baselines. Formal T1 remains a separate roadmap item.
+
+Build the Redis bridge with `-DPMT_REDIS_PAGES=65536` for a 256 MiB mapped workload. Its default remains 8192 pages for reproducing published campaigns. Calibrate the memory cap on separate seeds before freezing it. Compare stock Linux and filtered LRU on fresh paired request streams. Start with a 4 MiB target (1024 pages). The existing 64-advice ceiling and 24-page accounting must be replaced for this campaign.
+
+At fixed request checkpoints, record whole-mapping residency, the number of advised pages simultaneously nonresident, process RSS, swap reads and writes, p99 and throughput. Distinguish new reclaim from pages already absent before advice. Attribute device I/O at the run level. Report target misses and paired differences. A reproducible null closes the experiment as well as a positive result.
+
+A mixed-write pilot is conditional on finding measurable reclaim cost. Establish whether write history predicts writeback within age buckets before training a ranking. Reuse the fresh-seed and matched-target criteria if advancing to a learned policy.
