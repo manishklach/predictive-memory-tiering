@@ -14,13 +14,13 @@ sys.path.insert(0, str(HERE.parent))
 from reclaim_cost import fit_tables
 
 
-def arm(server, module, directory, mode, seed, cap):
+def arm(server, module, directory, mode, seed, cap, pattern="flip"):
     group = Path(tempfile.mkdtemp(prefix="pmt-redis-", dir="/sys/fs/cgroup"))
     sock = directory / "server.sock"
     result = directory / "reply.json"
     result.unlink(missing_ok=True)
     env = dict(os.environ, PYTHONPATH=str(HERE), PMT_MODEL_DIR=str(directory),
-               PMT_REDIS_MODULE=str(module), PMT_REDIS_RESULT=str(result),
+               PMT_HOT_PATTERN=pattern, PMT_REDIS_MODULE=str(module), PMT_REDIS_RESULT=str(result),
                PMT_REDIS_MODE=mode, PMT_REDIS_SEED=str(seed))
     proc = None
     try:
@@ -53,7 +53,9 @@ def arm(server, module, directory, mode, seed, cap):
         group.rmdir()
 
 
-def main(server, module, output):
+def main(server, module, output, flip_control=False):
+    if flip_control:
+        os.environ.update(PMT_BANDIT_TRIAL="1", PMT_CONSTANT_TARGET="1")
     with tempfile.TemporaryDirectory() as tmp:
         directory = Path(tmp)
         fit_tables(HERE.parents[1] / "results/sydney-nvme-pilot", directory)
@@ -68,13 +70,24 @@ def main(server, module, output):
         runs = []
         for i, order in enumerate(orders):
             seed = first_seed + i
-            rows = [arm(server, module, directory, mode, seed, cap) for mode in order]
-            if len({r["checksum"] for r in rows}) != 1:
-                raise ValueError("checksum mismatch")
-            runs.extend(rows)
+            patterns = ("flip", "no-flip") if flip_control else ("flip",)
+            if i % 2:
+                patterns = patterns[::-1]
+            for pattern in patterns:
+                rows = [arm(server, module, directory, mode, seed, cap, pattern) for mode in order]
+                if len({r["checksum"] for r in rows}) != 1:
+                    raise ValueError("checksum mismatch")
+                for row in rows:
+                    row["pattern"] = pattern
+                runs.extend(rows)
         output.write_text(json.dumps(dict(version=subprocess.check_output([server,"--version"],
-            text=True).strip(), calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
+            text=True).strip(), constant_target=flip_control, calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
 
 
 if __name__ == "__main__":
-    main(*map(Path, sys.argv[1:]))
+    import argparse
+    parser = argparse.ArgumentParser()
+    for key in ("server", "module", "output"):
+        parser.add_argument(key, type=Path)
+    parser.add_argument("--flip-control", action="store_true")
+    main(**vars(parser.parse_args()))

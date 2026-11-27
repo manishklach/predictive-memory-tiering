@@ -36,7 +36,7 @@ class BanditTest(unittest.TestCase):
     def test_identical_phase_budgets_and_stale_region_expiry(self):
         for mode in ("bandit", "cost", "noswap"):
             actions = []
-            selector = SimpleNamespace(apply=actions.append, bandit=None,
+            selector = SimpleNamespace(apply=actions.append, bandit=None, advised={}, followup=None,
                        swap_trace=SimpleNamespace(snapshot=lambda: {}))
             schedule = TrialSchedule(selector, mode, 13, 60000)
             t = 1_000_000_000

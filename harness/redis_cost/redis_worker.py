@@ -2,6 +2,7 @@
 from array import array
 from contextlib import nullcontext
 import ctypes
+import hashlib
 import json
 import mmap
 import os
@@ -53,11 +54,13 @@ def run(address, pages):
     draws = array("I", (rng.randrange(pages if i % 2 else 64) for i in range(60000)))
     schedule = None
     if adaptive_trial:
-        for i in range(30000, len(draws), 2):
-            draws[i] += pages // 2
+        if os.environ.get("PMT_HOT_PATTERN", "flip") == "flip":
+            for i in range(30000, len(draws), 2):
+                draws[i] += pages // 2
         if traced:
             from batch_bandit import TrialSchedule
-            schedule = TrialSchedule(selector, mode, seed, len(draws))
+            schedule = TrialSchedule(selector, mode, seed, len(draws),
+                                     constant_target=os.environ.get('PMT_CONSTANT_TARGET') == '1')
     times = array("Q")
     consumed = checksum = 0
     with monitor:
@@ -86,7 +89,8 @@ def run(address, pages):
         faults = selector.swap_trace.finish() if traced else None
         if traced:
             selector.followup.close()
-    row = dict(phases=schedule.report(times, elapsed, faults) if schedule else None, query_seed=seed, checksum=checksum, mode=f"bounded-{mode}-faulttrace",
+    row = dict(first_half_sha256=hashlib.sha256(draws[:30000]).hexdigest(),
+               second_half_sha256=hashlib.sha256(draws[30000:]).hexdigest(), phases=schedule.report(times, elapsed, faults) if schedule else None, query_seed=seed, checksum=checksum, mode=f"bounded-{mode}-faulttrace",
                p99_us=sorted(times)[59399]/1000, queries_per_s=len(times)*1e9/elapsed,
                task_swap_calls=selector.swap_trace.task_faults if traced else None,
                swap_faults=faults, residency_followup=selector.followup.pages if traced else None)
