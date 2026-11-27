@@ -61,7 +61,7 @@ class TrialSchedule:
         self.selector = selector
         self.operations = operations
         self.phase_boundary = operations // 2 if phase_boundary is None else phase_boundary
-        if not 0 < self.phase_boundary < operations:
+        if not 0 < self.phase_boundary <= operations:
             raise ValueError('phase boundary outside workload')
         self.consumed = 0
         self.region = None
@@ -92,8 +92,14 @@ class TrialSchedule:
     def report(self, times, elapsed, faults):
         total = sum(p["slept_offcpu_ns"] for p in faults.values())
         mid = self.phase_boundary
+        if mid == self.operations:
+            self.mid_ns, self.mid_sleep = elapsed, total
+            self.mid_advised = len(self.selector.advised)
+            self.mid_confirmed = self.selector.followup.confirmed
         def phase(samples, duration, sleep):
             count = len(samples)
+            if not count:
+                return dict(stall_ns=sleep, p99_us=None, ops_per_s=None)
             return dict(stall_ns=sleep, p99_us=sorted(samples)[(99*count+99)//100-1]/1000,
                         ops_per_s=count*1e9/duration)
         return dict(mid_advised=self.mid_advised, mid_confirmed=self.mid_confirmed, first=phase(times[:mid], self.mid_ns, self.mid_sleep),

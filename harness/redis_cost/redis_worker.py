@@ -53,11 +53,11 @@ def run(address, pages):
     rng = random.Random(seed)
     draws = array("I", (rng.randrange(pages if i % 2 else 64) for i in range(60000)))
     boundary = int(os.environ.get('PMT_FLIP_AFTER', 30000))
+    anchor = os.environ.get("PMT_FEEDBACK_ANCHOR") == "1"
+    trigger = None
+    flip = os.environ.get("PMT_HOT_PATTERN", "flip") == "flip"
     schedule = None
     if adaptive_trial:
-        if os.environ.get("PMT_HOT_PATTERN", "flip") == "flip":
-            for i in range(boundary, len(draws), 2):
-                draws[i] += pages // 2
         if traced:
             from batch_bandit import TrialSchedule
             schedule = TrialSchedule(selector, mode, seed, len(draws),
@@ -69,10 +69,22 @@ def run(address, pages):
             selector.followup = ResidencyFollowup(selector)
             selector.swap_trace = SwapTrace()
         start = time.monotonic_ns()
-        for page in draws:
+        for index, page in enumerate(draws):
             t = time.monotonic_ns()
             if traced:
                 selector.followup.poll(t)
+                if anchor and trigger is None and index and index % 128 == 0:
+                    selector.bandit.mature(selector, t)
+                    history = selector.bandit.history
+                    slots = selector.target_pages - selector.followup.confirmed - selector.followup.outstanding
+                    if all(history.values()) and slots > 0 and len(selector.advised) < 64:
+                        schedule.phase_boundary = boundary = index
+                        trigger = dict(completed=index, time_ns=t, slots=slots,
+                                       outstanding=selector.followup.outstanding,
+                                       mature={arm: len(h) for arm, h in history.items()})
+                if schedule and flip and index >= boundary and index % 2 == 0:
+                    page += pages // 2
+                    draws[index] = page
                 if schedule:
                     schedule.step(len(times) + 1, t, detector, start)
                 elif consumed < len(detector.decisions):
@@ -90,7 +102,7 @@ def run(address, pages):
         faults = selector.swap_trace.finish() if traced else None
         if traced:
             selector.followup.close()
-    row = dict(first_half_sha256=hashlib.sha256(draws[:boundary]).hexdigest(),
+    row = dict(boundary=boundary, trigger=trigger, first_half_sha256=hashlib.sha256(draws[:boundary]).hexdigest(),
                second_half_sha256=hashlib.sha256(draws[boundary:]).hexdigest(), phases=schedule.report(times, elapsed, faults) if schedule else None, query_seed=seed, checksum=checksum, mode=f"bounded-{mode}-faulttrace",
                p99_us=sorted(times)[59399]/1000, queries_per_s=len(times)*1e9/elapsed,
                task_swap_calls=selector.swap_trace.task_faults if traced else None,

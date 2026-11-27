@@ -14,7 +14,7 @@ sys.path.insert(0, str(HERE.parent))
 from reclaim_cost import fit_tables
 
 
-def arm(server, module, directory, mode, seed, cap, pattern="flip"):
+def arm(server, module, directory, mode, seed, cap, pattern="flip", boundary=None, anchor=False):
     group = Path(tempfile.mkdtemp(prefix="pmt-redis-", dir="/sys/fs/cgroup"))
     sock = directory / "server.sock"
     result = directory / "reply.json"
@@ -22,6 +22,9 @@ def arm(server, module, directory, mode, seed, cap, pattern="flip"):
     env = dict(os.environ, PYTHONPATH=str(HERE), PMT_MODEL_DIR=str(directory),
                PMT_HOT_PATTERN=pattern, PMT_REDIS_MODULE=str(module), PMT_REDIS_RESULT=str(result),
                PMT_REDIS_MODE=mode, PMT_REDIS_SEED=str(seed))
+    if boundary is not None:
+        env["PMT_FLIP_AFTER"] = str(boundary)
+    env["PMT_FEEDBACK_ANCHOR"] = str(int(anchor))
     proc = None
     try:
         if cap:
@@ -53,7 +56,9 @@ def arm(server, module, directory, mode, seed, cap, pattern="flip"):
         group.rmdir()
 
 
-def main(server, module, output, flip_control=False, flip_after=30000):
+def main(server, module, output, flip_control=False, flip_after=30000, feedback_flip=False):
+    if feedback_flip and not flip_control:
+        raise ValueError("feedback flip requires paired controls")
     if not 0 < flip_after < 60000 or flip_after % 2:
         raise ValueError('flip-after must be an even operation count between 0 and 60000')
     if flip_after != 30000 and not flip_control:
@@ -78,6 +83,18 @@ def main(server, module, output, flip_control=False, flip_after=30000):
             patterns = ("flip", "no-flip") if flip_control else ("flip",)
             if i % 2:
                 patterns = patterns[::-1]
+            if feedback_flip:
+                anchor = arm(server, module, directory, "bandit", seed, cap, "flip", 60000, True)
+                anchor["pattern"] = "flip"
+                runs.append(anchor)
+                for pattern in patterns:
+                    for mode in order:
+                        if (pattern, mode) == ("flip", "bandit"):
+                            continue
+                        row = arm(server, module, directory, mode, seed, cap, pattern, anchor["boundary"])
+                        row["pattern"] = pattern
+                        runs.append(row)
+                continue
             for pattern in patterns:
                 rows = [arm(server, module, directory, mode, seed, cap, pattern) for mode in order]
                 if len({r["checksum"] for r in rows}) != 1:
@@ -86,7 +103,7 @@ def main(server, module, output, flip_control=False, flip_after=30000):
                     row["pattern"] = pattern
                 runs.extend(rows)
         output.write_text(json.dumps(dict(version=subprocess.check_output([server,"--version"],
-            text=True).strip(), flip_after=flip_after, constant_target=flip_control, calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
+            text=True).strip(), feedback_flip=feedback_flip, flip_after=None if feedback_flip else flip_after, constant_target=flip_control, calibration=reference, memory_max_bytes=cap, requests=60000, runs=runs)))
 
 
 if __name__ == "__main__":
@@ -95,5 +112,6 @@ if __name__ == "__main__":
     for key in ("server", "module", "output"):
         parser.add_argument(key, type=Path)
     parser.add_argument("--flip-control", action="store_true")
+    parser.add_argument("--feedback-flip", action="store_true")
     parser.add_argument("--flip-after", type=int, default=30000)
     main(**vars(parser.parse_args()))
