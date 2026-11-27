@@ -6,6 +6,21 @@ On SQLite, all three selectors reached the 96 KiB reclaim target on all 12 seeds
 
 When memory is tight, stock Linux can swap an inactive page to NVMe and fetch it when the workload faults. A workload with predictable reuse may tolerate a smaller DRAM tier if software can identify pages that will stay cold and fetch swapped pages before their next access. The vision is to make the DRAM budget a tunable resource for workloads with that access pattern, while preserving the stock Linux fault path.
 
+### Redis hot-set flip after both bandit arms received feedback
+
+On the Sydney `i7i.2xlarge` NVMe pilot, each of 12 seeds ran 60,000 Redis requests per condition under a 29,929,472-byte cgroup limit. Every 128 completed requests, the flip-bandit checked for mature 100 ms outcomes from both arms, an available advice slot and unreserved reclaim capacity. All 12 seeds qualified between requests 14,464 and 24,064 with 14–20 reclaim slots free. The bandit advised 298 additional pages across those 12 runs. Each seed's other five runs used the same boundary. The flip-bandit always ran first to establish it, which leaves a run-order confound.
+
+| Hot set | Policy | 96 KiB hits / 12 | Tagged fault sleep, ms | Median p99, µs | Median requests/s |
+|---|---|---:|---:|---:|---:|
+| Flip | Filtered LRU | 9 | 9.15 | 91.27 | 62,588 |
+| Flip | Fixed cost-aware | 11 | 9.60 | 91.50 | 54,190 |
+| Flip | Bandit | 11 | 9.43 | 91.33 | 54,992 |
+| Stable | Filtered LRU | 9 | 10.23 | 91.07 | 55,780 |
+| Stable | Fixed cost-aware | 12 | 10.19 | 91.29 | 55,320 |
+| Stable | Bandit | 11 | 10.59 | 91.36 | 54,355 |
+
+Hits use all seeds. Sleep totals and whole-run performance medians use the **five seeds** where all six runs confirmed 24 pages nonresident at their respective 10 ms checkpoints. With the flip, the bandit matched fixed cost-aware on target hits. Filtered LRU reached the target less often but recorded the highest throughput and lowest tagged fault sleep on the common five seeds. This pilot shows the bandit had an opportunity to adapt and gives mixed evidence for its benefit. [Raw runs, validation and per-seed results](results/sydney-nvme-pilot/redis-feedback-flip/)
+
 ## How it works
 
 The PID-scoped module emits synthetic sequence numbers through a bounded trace ring. A separate cooperative workload reports page accesses and residency to the C controller. The controller ranks eviction candidates and uses stride or Markov prediction. The workload applies the resulting advice to its own anonymous arena.

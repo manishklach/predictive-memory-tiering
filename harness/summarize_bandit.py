@@ -31,9 +31,10 @@ def analyze(data):
         runs = [r for r in data["runs"] if r["mode"] == mode]
         for phase in ("first", "second"):
             items = [r["phases"][phase] for r in runs]
+            observed = [item for item in items if item["ops_per_s"] is not None]
             group[phase] = dict(slept_ms=sum(p["stall_ns"] for p in items)/1e6,
-                                p99_us=median(p["p99_us"] for p in items),
-                                ops_per_s=median(p["ops_per_s"] for p in items))
+                                p99_us=median(p["p99_us"] for p in observed) if observed else None,
+                                ops_per_s=median(p["ops_per_s"] for p in observed) if observed else None)
     matched = set.intersection(*[{r["seed"] for r in rows if r["confirmed_bytes"] == report["target_bytes"]}
                                  for rows in report["seeds"].values()])
     report["matched_seeds"] = sorted(matched)
@@ -47,7 +48,7 @@ def analyze(data):
     choices = {"first": Counter(), "second": Counter()}
     for run in data["runs"]:
         for batch in run["phases"]["decisions"]:
-            phase = "first" if batch["query"] <= data.get("flip_after", data["requests"] // 2) else "second"
+            phase = "first" if batch["query"] <= run.get("boundary", data.get("flip_after", data["requests"] // 2)) else "second"
             choices[phase][batch["arm"] + "_" + batch["reason"]] += 1
     report["bandit_batch_counts"] = choices
     return report
