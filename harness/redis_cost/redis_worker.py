@@ -40,14 +40,24 @@ def run(address, pages):
     getrange.argtypes = [ctypes.c_int]
     obj = RedisValue(address, pages * mmap.PAGESIZE, libc)
     selector = BoundedEviction(obj, address, libc, lru=True, skip_swapped=mode in ("cost", "noswap"))
-    if mode in ("cost", "idle"):
-        selector.idle_risk = json.loads((directory / f"{mode}-frozen.json").read_text())
+    adaptive_trial = os.environ.get("PMT_BANDIT_TRIAL") == "1"
+    if mode == "bandit":
+        selector.skip_swapped = True
+    if mode in ("cost", "idle", "bandit"):
+        selector.idle_risk = json.loads((directory / ("cost-frozen.json" if mode == "bandit" else f"{mode}-frozen.json")).read_text())
     selector.target_pages = 24
     detector = RegionDetector()
     traced = mode != "calibration"
     monitor = sampling(os.getpid(), [(address, address + len(obj))], detector, buffer_kb=32) if traced else nullcontext()
     rng = random.Random(seed)
     draws = array("I", (rng.randrange(pages if i % 2 else 64) for i in range(60000)))
+    schedule = None
+    if adaptive_trial:
+        for i in range(30000, len(draws), 2):
+            draws[i] += pages // 2
+        if traced:
+            from batch_bandit import TrialSchedule
+            schedule = TrialSchedule(selector, mode, seed, len(draws))
     times = array("Q")
     consumed = checksum = 0
     with monitor:
@@ -59,7 +69,9 @@ def run(address, pages):
             t = time.monotonic_ns()
             if traced:
                 selector.followup.poll(t)
-                if consumed < len(detector.decisions):
+                if schedule:
+                    schedule.step(len(times) + 1, t, detector, start)
+                elif consumed < len(detector.decisions):
                     consumed = len(detector.decisions)
                     region = detector.decisions[consumed - 1][1]
                     if region:
@@ -74,7 +86,7 @@ def run(address, pages):
         faults = selector.swap_trace.finish() if traced else None
         if traced:
             selector.followup.close()
-    row = dict(query_seed=seed, checksum=checksum, mode=f"bounded-{mode}-faulttrace",
+    row = dict(phases=schedule.report(times, elapsed, faults) if schedule else None, query_seed=seed, checksum=checksum, mode=f"bounded-{mode}-faulttrace",
                p99_us=sorted(times)[59399]/1000, queries_per_s=len(times)*1e9/elapsed,
                task_swap_calls=selector.swap_trace.task_faults if traced else None,
                swap_faults=faults, residency_followup=selector.followup.pages if traced else None)

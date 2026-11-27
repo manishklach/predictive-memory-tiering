@@ -18,20 +18,28 @@ class SwapTrace:
         os.write(self.fd, struct.pack("@L", addr))
         self.pages.append(page)
 
-    def finish(self):
-        with os.fdopen(self.fd) as stream:
+    def snapshot(self):
+        os.lseek(self.fd, 0, os.SEEK_SET)
+        with os.fdopen(self.fd, closefd=False) as stream:
             header, *lines = stream.read().splitlines()
         fields = header.split()
         if fields[:3] != ["missed", "0", "task_faults"] or len(lines) != len(self.pages):
             raise RuntimeError(f"incomplete swap trace: {header}, {len(lines)} rows")
         self.task_faults = int(fields[3])
-        if not self.task_faults:
-            raise RuntimeError("no query-thread swap events; tracer liveness unverified")
         result = {}
         for line in lines:
-            i, calls, handler_ns, delay_ns, offcpu_ns = map(int, line.split())
-            result[self.pages[i]] = dict(calls=calls, handler_ns=handler_ns, swapin_delay_ns=delay_ns, slept_offcpu_ns=offcpu_ns)
+            i, calls, handler_ns, delay_ns, offcpu_ns, early_ns = map(int, line.split())
+            result[self.pages[i]] = dict(calls=calls, handler_ns=handler_ns, swapin_delay_ns=delay_ns, slept_offcpu_ns=offcpu_ns, early_offcpu_ns=early_ns)
         return result
+
+    def finish(self):
+        try:
+            result = self.snapshot()
+            if not self.task_faults:
+                raise RuntimeError("no query-thread swap events; tracer liveness unverified")
+            return result
+        finally:
+            os.close(self.fd)
 
 
 def validate():
@@ -67,7 +75,13 @@ def validate():
         assert buf[unregistered * size] == 17  # Unregistered negative control.
         for i in tagged:
             assert buf[i * size] == 17
+    first = trace.snapshot()
+    time.sleep(.11)
+    later = trace.snapshot()
     result = trace.finish()
+    assert all(first[i]["early_offcpu_ns"] == later[i]["early_offcpu_ns"] == result[i]["early_offcpu_ns"]
+               for i in result)
+    assert all(0 <= r["early_offcpu_ns"] <= r["slept_offcpu_ns"] for r in result.values())
     assert set(result) == {0, *tagged} and result[0]["calls"] == 0
     assert all(result[i]["calls"] >= 1 for i in tagged)
     assert all(r["handler_ns"] >= r["slept_offcpu_ns"] for r in result.values())

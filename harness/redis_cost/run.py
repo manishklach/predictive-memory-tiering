@@ -57,15 +57,17 @@ def main(server, module, output):
     with tempfile.TemporaryDirectory() as tmp:
         directory = Path(tmp)
         fit_tables(HERE.parents[1] / "results/sydney-nvme-pilot", directory)
-        reference = arm(server, module, directory, "calibration", 22345, 0)
+        bandit = os.environ.get("PMT_BANDIT_TRIAL") == "1"
+        first_seed = 32345 if bandit else 22345
+        reference = arm(server, module, directory, "calibration", first_seed, 0)
         if reference["swap_peak_bytes"]:
             raise ValueError("uncapped calibration swapped")
         cap = reference["peak_bytes"] // 8192 * 4096
-        orders = list(permutations(("cost", "noswap", "idle"))) * 2
+        orders = list(permutations(("cost", "noswap", "bandit" if bandit else "idle"))) * 2
         random.Random(1207).shuffle(orders)
         runs = []
         for i, order in enumerate(orders):
-            seed = 22345 + i
+            seed = first_seed + i
             rows = [arm(server, module, directory, mode, seed, cap) for mode in order]
             if len({r["checksum"] for r in rows}) != 1:
                 raise ValueError("checksum mismatch")

@@ -23,6 +23,9 @@ class BoundedEviction:
         self.swap_trace = None
         self.idle_risk = None
         self.target_pages = 0
+        self.bandit = None
+        self.batch_size = 16
+        self.query = 0
         self.guard_ns = guard_ns
         self.backing = backing
         self.address = address
@@ -50,7 +53,7 @@ class BoundedEviction:
         if end <= start or len(self.advised) >= 64:
             return
         bits = self.residency(start * page, end - start)
-        budget = min(16, 64 - len(self.advised))
+        budget = min(self.batch_size, 64 - len(self.advised))
         if self.target_pages:
             # Reserve one target slot per outstanding observation to avoid overshoot.
             budget = min(budget, self.target_pages - self.followup.confirmed - self.followup.outstanding)
@@ -65,6 +68,13 @@ class BoundedEviction:
                         continue
                     yield i
 
+        table = self.idle_risk
+        if self.bandit:
+            decision_ns = time.monotonic_ns()
+            arm, reason = self.bandit.choose(self, decision_ns)
+            batch = []
+            if arm == "noswap":
+                table = None
         eligible = eligible_pages()
         if self.capture:
             eligible = list(eligible)
@@ -84,15 +94,15 @@ class BoundedEviction:
                                pte=pagemap_state(pagemap.fileno(), self.address, i))
                     return self.predictor.score(epoch, row), i
                 victims = nsmallest(budget, eligible, key=risk)
-        elif self.skip_swapped and self.idle_risk is None:
+        elif self.skip_swapped and table is None:
             # Walk beyond the top K to refill slots rejected by the last-moment PTE check.
             victims = sorted(eligible, key=self.last_read.__getitem__)
-        elif self.idle_risk is not None:
+        elif table is not None:
             now = time.monotonic_ns()
             def idle_score(i):
                 stamp = self.last_read[i]
                 age = ((now - stamp) // RECENT_NS).bit_length() if stamp else -1
-                return self.idle_risk.get(str(age), self.idle_risk["fallback"]), i
+                return table.get(str(age), table["fallback"]), i
             victims = sorted(eligible, key=idle_score) if self.skip_swapped else nsmallest(budget, eligible, key=idle_score)
         elif self.lru:
             # Zero timestamps are unseen pages. nsmallest preserves address order on ties.
@@ -118,6 +128,8 @@ class BoundedEviction:
                 self.advised[i] = time.monotonic_ns()
                 if self.swap_trace:
                     self.swap_trace.mark(self.address + i * page, i)
+                if self.bandit:
+                    batch.append(i)
                 self.stats["requests"] += 1
                 resident = (self.followup.immediate(i, self.advised[i]) if self.followup
                             else self.residency(i * page, 1)[0] & 1)
@@ -125,6 +137,9 @@ class BoundedEviction:
                 budget -= 1
                 if budget == 0:
                     break
+
+        if self.bandit:
+            self.bandit.record(arm, reason, batch, decision_ns, self.query)
 
     def on_read(self, offset, amount):
         now = time.monotonic_ns() if self.last_read is not None else None

@@ -38,7 +38,8 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     trace_enabled = mode.endswith('-faulttrace')
     mode = mode.removesuffix('-faulttrace')
     idle_only = mode == 'bounded-idle'
-    cost_policy = mode == 'bounded-cost'
+    adaptive = mode == 'bounded-bandit'
+    cost_policy = mode == 'bounded-cost' or adaptive
     if idle_only or cost_policy:
         mode = 'bounded-lru'
     profiled = binary is not None
@@ -74,6 +75,10 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
     elif idle_only:
         table = Path(os.environ["PMT_MODEL_DIR"]) / f"idle-{seed}.json"
         bounded.idle_risk = json.loads(table.read_text())
+    schedule = None
+    if bounded and os.environ.get("PMT_BANDIT_TRIAL") == "1":
+        from batch_bandit import TrialSchedule
+        schedule = TrialSchedule(bounded, "bandit" if adaptive else "fixed", seed, requests)
     capture = None
     if mode == 'bounded-on' and os.environ.get('PMT_CANDIDATE_DIR'):
         from candidate_capture import CandidateCapture
@@ -216,7 +221,9 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
             t = time.perf_counter_ns()
             if followup:
                 followup.poll(t)
-            if bounded and consumed < len(detector.decisions):
+            if schedule:
+                schedule.step(len(times) + 1, t, detector, start)
+            elif bounded and consumed < len(detector.decisions):
                 consumed = len(detector.decisions)
                 region = detector.decisions[consumed - 1][1]
                 if region:
@@ -255,7 +262,7 @@ def worker(db, mode, binary, interval, score_interval, seed, requests=REQUESTS):
         ctl.stdin.close()
         if ctl.wait():
             raise RuntimeError("controller failed")
-    print(json.dumps(dict(task_swap_calls=bounded.swap_trace.task_faults if trace_enabled else None, swap_faults=trace_result, p99_us=sorted(times)[(99 * requests + 99) // 100 - 1] / 1000,
+    print(json.dumps(dict(phases=schedule.report(times, elapsed, trace_result) if schedule else None, task_swap_calls=bounded.swap_trace.task_faults if trace_enabled else None, swap_faults=trace_result, p99_us=sorted(times)[(99 * requests + 99) // 100 - 1] / 1000,
                           queries_per_s=requests * 1e9 / elapsed, elapsed_ns=elapsed,
                           worker_cpu_ms=1000*(used.ru_utime + used.ru_stime - usage.ru_utime - usage.ru_stime),
                           memory_at_query_start=memory_at_start if fault_probe else None,
@@ -289,7 +296,8 @@ def run(db, mode, limit, binary=None, interval=16, score_interval=1, seed=12345,
         group.rmdir()
 
 
-def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False, swapfault_trial=False, filtered_fault_trial=False, cost_trial=False):
+def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, live_score, live_profile, paired_calibration, bounded_trial, selection_trial, scoring_trial, requests=REQUESTS, guard_trial=False, lru_trial=False, noswap_trial=False, predictor_trial=False, swapfault_trial=False, filtered_fault_trial=False, cost_trial=False, bandit_trial=False):
+    cost_trial = cost_trial or bandit_trial
     swapfault_trial = swapfault_trial or filtered_fault_trial
     bounded_trial = bounded_trial or cost_trial or selection_trial or scoring_trial or guard_trial or lru_trial or noswap_trial or predictor_trial or swapfault_trial
     with tempfile.TemporaryDirectory() as directory:
@@ -400,12 +408,15 @@ def main(output, baseline, stages, sweep, scoring_sweep, extended, damos, live, 
             fit_tables(ROOT / "results/sydney-nvme-pilot", Path(directory))
             os.environ.update(PMT_MODEL_DIR=directory, PMT_TARGET_PAGES="24", PMT_RESIDENCY_FOLLOWUP="1")
             modes = ("bounded-noswap-faulttrace", "bounded-idle-faulttrace", "bounded-cost-faulttrace")
+            if bandit_trial:
+                os.environ["PMT_BANDIT_TRIAL"] = "1"
+                modes = ("bounded-noswap-faulttrace", "bounded-cost-faulttrace", "bounded-bandit-faulttrace")
             orders = list(permutations(modes)) * 2
             random.Random(1207).shuffle(orders)
         for pair, order in enumerate(orders):
             seed = 12345 + pair if extended or damos or live or live_score or live_profile or bounded_trial else 12345
             if cost_trial:
-                seed = 22345 + pair
+                seed = (32345 if bandit_trial else 22345) + pair
             expected_checksum = control["checksum"] if seed == 12345 else None
             for mode in order:
                 binary = baseline if mode == "detector-before" else None
@@ -450,6 +461,7 @@ if __name__ == "__main__":
         parser.add_argument("--paired-calibration", type=Path, help="reuse the half-memory cap from a previous experiment")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--scoring-trial", action="store_true", help="matched stock and fixed-range scoring-only runs with opaque SQLite payloads")
+        group.add_argument("--bandit-trial", action="store_true", help="compare delayed bandit and both fixed arms on fresh seeds")
         group.add_argument("--cost-trial", action="store_true", help="compare frozen policies at 24 confirmed reclaim transitions")
         group.add_argument("--filtered-fault-trial", action="store_true", help="add traced swap-entry-filtered LRU to fault comparison")
         group.add_argument("--swapfault-trial", action="store_true", help="compare LRU and idle risk with and without swap fault probes")
@@ -471,4 +483,4 @@ if __name__ == "__main__":
         args = parser.parse_args()
         if args.requests < 1:
             parser.error('--requests must be positive')
-        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial, args.swapfault_trial, args.filtered_fault_trial, args.cost_trial)
+        main(args.output, args.profile_baseline, args.stages, args.sampling_sweep, args.scoring_sweep, args.extended_scoring, args.damos, args.live, args.live_score, args.live_profile, args.paired_calibration, args.bounded_trial, args.selection_trial, args.scoring_trial, args.requests, args.guard_trial, args.lru_trial, args.noswap_trial, args.predictor_trial, args.swapfault_trial, args.filtered_fault_trial, args.cost_trial, args.bandit_trial)

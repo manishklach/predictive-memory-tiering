@@ -7,7 +7,7 @@ from statistics import median
 import sys
 
 
-def summarize(data):
+def summarize(data, first_seed=22345, policies=("noswap", "idle", "cost")):
     groups = defaultdict(list)
     for run in data["runs"]:
         pages = run["residency_followup"]
@@ -22,10 +22,10 @@ def summarize(data):
             present_before_slept_ns=sum(faults[k]["slept_offcpu_ns"] for k,p in pages.items()
                                         if p["before"]["pte"]=="present"),
             p99_us=run["p99_us"], queries_per_s=run["queries_per_s"]))
-    expected = {"bounded-" + s + "-faulttrace" for s in ("noswap","idle","cost")}
+    expected = {"bounded-" + s + "-faulttrace" for s in policies}
     assert set(groups) == expected
     for rows in groups.values():
-        assert sorted(r["seed"] for r in rows) == list(range(22345,22357))
+        assert sorted(r["seed"] for r in rows) == list(range(first_seed, first_seed + 12))
     summary = {}
     for mode, rows in groups.items():
         summary[mode] = dict(target_met=sum(r["confirmed_bytes"]==98304 for r in rows),

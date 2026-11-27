@@ -13,7 +13,7 @@
 
 struct page_sample {
 	unsigned long addr;
-	u64 count, duration, delay, offcpu;
+	u64 count, duration, delay, offcpu, early_offcpu, marked;
 };
 
 struct call_sample {
@@ -47,7 +47,13 @@ static void switched(void *unused, bool preempt, struct task_struct *prev,
 	if (task_pid_nr(prev) == pid && !preempt && prev_state)
 		WRITE_ONCE(slept_at, ktime_get_ns());
 	if (task_pid_nr(next) == pid && READ_ONCE(slept_at)) {
-		page->offcpu += ktime_get_ns() - READ_ONCE(slept_at);
+		u64 end = ktime_get_ns();
+		u64 start = READ_ONCE(slept_at);
+		u64 cutoff = page->marked + 100 * NSEC_PER_MSEC;
+
+		page->offcpu += end - start;
+		if (start < cutoff)
+			page->early_offcpu += min(end, cutoff) - start;
 		WRITE_ONCE(slept_at, 0);
 	}
 }
@@ -102,8 +108,9 @@ static int show(struct seq_file *m, void *unused)
 		return -EPERM;
 	seq_printf(m, "missed %d task_faults %llu\n", probe.nmissed, task_faults);
 	for (i = 0; i < nr_pages; i++)
-		seq_printf(m, "%u %llu %llu %llu %llu\n", i, pages[i].count,
-			   pages[i].duration, pages[i].delay, pages[i].offcpu);
+		seq_printf(m, "%u %llu %llu %llu %llu %llu\n", i, pages[i].count,
+			   pages[i].duration, pages[i].delay, pages[i].offcpu,
+			   pages[i].early_offcpu);
 	return 0;
 }
 
@@ -148,6 +155,7 @@ static ssize_t mark(struct file *file, const char __user *buf, size_t size,
 		return -EFAULT;
 	if (!PAGE_ALIGNED(addr) || !access_ok((void __user *)addr, PAGE_SIZE))
 		return -EINVAL;
+	pages[nr_pages].marked = ktime_get_ns();
 	pages[nr_pages++].addr = addr;
 	return size;
 }
@@ -167,6 +175,7 @@ static const struct file_operations ops = {
 	.open = trace_open,
 	.write = mark,
 	.read = seq_read,
+	.llseek = seq_lseek,
 	.release = trace_close,
 };
 static struct miscdevice dev = {
